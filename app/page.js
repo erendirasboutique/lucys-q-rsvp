@@ -389,6 +389,17 @@ export default function HomePage() {
                       onChange={(e) => setRsvp({ ...rsvp, guest_count: Number(e.target.value) })}
                     />
                   </div>
+              <div className="rsvp-info-row">
+  <div className="info-pill">
+    <span>🎉 Table Assignment</span>
+    <strong>{rsvp.table_number || "Coming Soon"}</strong>
+  </div>
+
+  <div className="info-pill">
+    <span>🎟 Check-In Code</span>
+    <strong>{rsvp.checkin_code || "Coming Soon"}</strong>
+  </div>
+</div>       
                 </div>
  
                 <div className="field">
