@@ -385,7 +385,55 @@ th {
 .mini-btn.danger {
   background: #b00040;
 }
+.language-switch {
+  margin-top: 14px;
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(227,10,122,0.2);
+  padding: 10px 14px;
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+}
 
+.language-switch label {
+  color: #e30a7a;
+  font-weight: 700;
+}
+
+.language-switch select {
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+.success-screen {
+  margin: 18px 0;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.8);
+  border: 1px solid rgba(227,10,122,0.25);
+  text-align: center;
+  animation: successPop 0.5s ease both;
+}
+
+.success-check {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  background: #e30a7a;
+  color: white;
+  font-size: 34px;
+  line-height: 54px;
+  animation: checkBounce 0.7s ease both;
+}
+
+@keyframes checkBounce {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
 .modal {
   position: fixed;
   inset: 0;
