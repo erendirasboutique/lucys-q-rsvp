@@ -15,7 +15,7 @@ export async function POST(request) {
     const { data, error } = await supabase
       .from("rsvps")
       .select("id, full_name, travel_from, attending, guest_count, additional_guests, confirmed_guests, phone, comments, updated_at")
-      .eq("phone_normalized", phoneNormalized)
+      .like("phone_normalized", `%${phoneNormalized}`)
       .ilike("full_name", fullName)
       .limit(1)
       .maybeSingle();
