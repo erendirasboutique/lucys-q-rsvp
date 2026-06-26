@@ -175,37 +175,34 @@ export default function HomePage() {
       </div>
 
       <section className="shell">
-        <div className="hero">
-          <img src="/logo.png" alt="Lucy's Quinceañera" className="logo" />
-          <div className="badge">{t.badge}</div>
+       <div className="hero">
+  <img src="/logo.png" alt="Lucy's Quinceañera" className="logo" />
 
-          <div className="language-switch">
-            <label>{t.language}</label>
-            <select value={lang} onChange={(e) => setLang(e.target.value)}>
-              <option value="es">Español</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-        </div>
+  <div className="heroBadges">
+    <div className="badge">{t.badge}</div>
 
-        <div className="card">
-          {!rsvp ? (
-            <>
-              <h1>{t.searchTitle}</h1>
-              <p>{t.searchIntro}</p>
+    <div className="language-switch">
+      <label>{t.language}</label>
+      <select value={lang} onChange={(e) => setLang(e.target.value)}>
+        <option value="es">Español</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+  </div>
 
-              <form className="form" onSubmit={searchRSVP}>
-                <div className="grid2">
-                  <div className="field">
-                    <label>{t.fullName}</label>
-                    <input
-                      value={lookup.full_name}
-                      onChange={(e) => setLookup({ ...lookup, full_name: e.target.value })}
-                      placeholder={t.namePlaceholder}
-                      required
-                    />
-                  </div>
-
+  {!rsvp && (
+    <div className="videoBox">
+      <video
+        src="/lucy-video.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        controls
+      />
+    </div>
+  )}
+</div>
                   <div className="field">
                     <label>{t.phone}</label>
                     <input
