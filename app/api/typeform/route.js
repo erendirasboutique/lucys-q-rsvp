@@ -45,17 +45,32 @@ export async function POST(request) {
         !isPhone(v)
     );
 
-    let additionalGuests = "";
-    let confirmedGuests = "";
-    let comments = "";
+const phoneIndex = values.findIndex((v) => isPhone(v));
+const guestCountIndex = values.findIndex((v) => v === String(guestCount));
 
-    if (guestCount > 1) {
-      additionalGuests = afterGuestCount[0] || "";
-      confirmedGuests = afterGuestCount[1] || "";
-      comments = afterGuestCount[2] || "";
-    } else {
-      comments = afterGuestCount[0] || "";
-    }
+const betweenGuestCountAndPhone =
+  phoneIndex > guestCountIndex
+    ? values.slice(guestCountIndex + 1, phoneIndex)
+    : [];
+
+const afterPhone =
+  phoneIndex >= 0
+    ? values.slice(phoneIndex + 1)
+    : [];
+
+let additionalGuests = "";
+let confirmedGuests = "";
+let comments = "";
+
+if (guestCount > 1) {
+  additionalGuests = betweenGuestCountAndPhone[0] || "";
+  confirmedGuests = betweenGuestCountAndPhone[1] || "";
+  comments = afterPhone[0] || "";
+} else {
+  additionalGuests = "";
+  confirmedGuests = "";
+  comments = afterPhone[0] || betweenGuestCountAndPhone[0] || "";
+}
 
     if (!fullName || !phoneNormalized) {
       return NextResponse.json(
