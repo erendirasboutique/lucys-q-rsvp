@@ -13,68 +13,162 @@ function answerValue(answer) {
   return "";
 }
 
-function isPhone(value) {
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function titleIncludes(answer, phrases) {
+  const title = normalizeText(answer?.field?.title || "");
+  const ref = normalizeText(answer?.field?.ref || "");
+  const id = normalizeText(answer?.field?.id || "");
+  return phrases.some((phrase) => {
+    const p = normalizeText(phrase);
+    return title.includes(p) || ref.includes(p) || id.includes(p);
+  });
+}
+
+function findAnswer(answers, phrases) {
+  const found = answers.find((answer) => titleIncludes(answer, phrases));
+  return cleanText(answerValue(found));
+}
+
+function findAllAnswers(answers, phrases) {
+  return answers
+    .filter((answer) => titleIncludes(answer, phrases))
+    .map(answerValue)
+    .map(cleanText)
+    .filter(Boolean);
+}
+
+function looksLikePhone(value) {
   return normalizePhone(value).length >= 7;
 }
 
+function makeCheckinCode(fullName, phoneNormalized) {
+  const digits = phoneNormalized.slice(-4) || Math.floor(1000 + Math.random() * 9000);
+  const initials = cleanText(fullName)
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 3);
+
+  return `LUCY-${initials || "G"}-${digits}`;
+}
+
 export async function GET() {
-  return NextResponse.json({ ok: true, message: "Typeform webhook route is live" });
+  return NextResponse.json({
+    ok: true,
+    message: "Typeform webhook route is live",
+  });
 }
 
 export async function POST(request) {
   try {
     const payload = await request.json();
     const answers = payload?.form_response?.answers || [];
-    const values = answers.map(answerValue).map(cleanText).filter(Boolean);
 
-    const fullName = values[0] || "";
-    const travelFrom = values[1] || "";
-    const attending = values[2] || "";
-    const guestCount = Number(values.find((v) => !isNaN(Number(v))) || 1);
+    const allValues = answers.map(answerValue).map(cleanText).filter(Boolean);
 
-    const phone = values.find((v) => isPhone(v)) || "";
-    const phoneNormalized = normalizePhone(phone);
+    const fullName =
+      findAnswer(answers, [
+        "por favor ingrese su nombre completo",
+        "ingrese su nombre completo",
+        "nombre completo",
+      ]) || allValues[0] || "";
 
-    const afterGuestCount = values.filter(
-      (v) =>
-        v !== fullName &&
-        v !== travelFrom &&
-        v !== attending &&
-        v !== String(guestCount) &&
-        v !== phone &&
-        !isPhone(v)
-    );
+    const travelFrom =
+      findAnswer(answers, [
+        "desde donde viaja",
+        "desde dónde viaja",
+        "where are you traveling",
+      ]) || "";
 
-const phoneIndex = values.findIndex((v) => isPhone(v));
-const guestCountIndex = values.findIndex((v) => v === String(guestCount));
+    const attending =
+      findAnswer(answers, [
+        "vas a asistir",
+        "asistir a la quinceanera",
+        "asistir a la quinceañera",
+      ]) || "";
 
-const betweenGuestCountAndPhone =
-  phoneIndex > guestCountIndex
-    ? values.slice(guestCountIndex + 1, phoneIndex)
-    : [];
+    const guestCountRaw =
+      findAnswer(answers, [
+        "cuantas personas habra",
+        "cuántas personas habrá",
+        "personas habra en su grupo",
+        "personas habrá en su grupo",
+      ]) || "";
 
-const afterPhone =
-  phoneIndex >= 0
-    ? values.slice(phoneIndex + 1)
-    : [];
+    const guest_count = Number(guestCountRaw || 1);
 
-let additionalGuests = "";
-let confirmedGuests = "";
-let comments = "";
+    const phone =
+      findAnswer(answers, [
+        "numero de telefono",
+        "número de teléfono",
+        "telefono",
+        "teléfono",
+        "phone number",
+        "best phone",
+      ]) ||
+      allValues.find((value) => looksLikePhone(value)) ||
+      "";
 
-if (guestCount > 1) {
-  additionalGuests = betweenGuestCountAndPhone[0] || "";
-  confirmedGuests = betweenGuestCountAndPhone[1] || "";
-  comments = afterPhone[0] || "";
-} else {
-  additionalGuests = "";
-  confirmedGuests = "";
-  comments = afterPhone[0] || betweenGuestCountAndPhone[0] || "";
-}
+    const phone_normalized = normalizePhone(phone);
 
-    if (!fullName || !phoneNormalized) {
+    const comments =
+      findAnswer(answers, [
+        "alguna pregunta",
+        "pregunta o comentario",
+        "preguntas o comentarios",
+        "comentario",
+        "comments",
+      ]) || "";
+
+    const guestNameAnswers = findAllAnswers(answers, [
+      "invitado",
+      "nombre e inicial",
+      "invitados adicionales",
+      "nombres de los invitados adicionales",
+    ]).filter((value) => {
+      const normalized = normalizeText(value);
+      return (
+        value !== fullName &&
+        value !== phone &&
+        value !== travelFrom &&
+        value !== attending &&
+        value !== guestCountRaw &&
+        value !== comments &&
+        !looksLikePhone(value) &&
+        !normalized.includes("todo se ve bien")
+      );
+    });
+
+    const additional_guests = guestNameAnswers.join("\n");
+
+    const confirmed_guests = [fullName, ...guestNameAnswers]
+      .filter(Boolean)
+      .join("\n");
+
+    if (!fullName || !phone_normalized) {
       return NextResponse.json(
-        { ok: false, error: "Missing full name or phone.", debug: { values } },
+        {
+          ok: false,
+          error: "Typeform submission is missing full name or phone.",
+          debug: {
+            allValues,
+            fullName,
+            phone,
+            fieldInfo: answers.map((answer) => ({
+              id: answer.field?.id || "",
+              ref: answer.field?.ref || "",
+              title: answer.field?.title || "",
+              value: answerValue(answer),
+            })),
+          },
+        },
         { status: 400 }
       );
     }
@@ -83,29 +177,51 @@ if (guestCount > 1) {
       full_name: fullName,
       travel_from: travelFrom,
       attending,
-      guest_count: guestCount,
-      additional_guests: additionalGuests,
-      confirmed_guests: confirmedGuests,
+      guest_count,
+      additional_guests,
+      confirmed_guests,
       phone,
-      phone_normalized: phoneNormalized,
+      phone_normalized,
       comments,
       typeform_response_id: payload?.form_response?.token || null,
+      checkin_code: makeCheckinCode(fullName, phone_normalized),
       updated_at: new Date().toISOString(),
     };
 
     const supabase = getSupabaseAdmin();
 
-    const { data: existing } = await supabase
+    const { data: existing, error: findError } = await supabase
       .from("rsvps")
-      .select("id")
-      .eq("phone_normalized", phoneNormalized)
+      .select("id, checkin_code, table_number, checked_in, checked_in_at")
+      .eq("phone_normalized", phone_normalized)
       .ilike("full_name", fullName)
       .limit(1)
       .maybeSingle();
 
-    const result = existing?.id
-      ? await supabase.from("rsvps").update(rsvp).eq("id", existing.id).select("*").single()
-      : await supabase.from("rsvps").insert(rsvp).select("*").single();
+    if (findError) throw findError;
+
+    let result;
+
+    if (existing?.id) {
+      result = await supabase
+        .from("rsvps")
+        .update({
+          ...rsvp,
+          checkin_code: existing.checkin_code || rsvp.checkin_code,
+          table_number: existing.table_number || null,
+          checked_in: existing.checked_in || false,
+          checked_in_at: existing.checked_in_at || null,
+        })
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+    } else {
+      result = await supabase
+        .from("rsvps")
+        .insert(rsvp)
+        .select("*")
+        .single();
+    }
 
     if (result.error) throw result.error;
 
