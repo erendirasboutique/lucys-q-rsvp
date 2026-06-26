@@ -13,6 +13,10 @@ function answerValue(answer) {
   return "";
 }
 
+function isPhone(value) {
+  return normalizePhone(value).length >= 7;
+}
+
 export async function GET() {
   return NextResponse.json({ ok: true, message: "Typeform webhook route is live" });
 }
@@ -21,38 +25,41 @@ export async function POST(request) {
   try {
     const payload = await request.json();
     const answers = payload?.form_response?.answers || [];
+    const values = answers.map(answerValue).map(cleanText).filter(Boolean);
 
-    const values = answers.map(answerValue);
+    const fullName = values[0] || "";
+    const travelFrom = values[1] || "";
+    const attending = values[2] || "";
+    const guestCount = Number(values.find((v) => !isNaN(Number(v))) || 1);
 
-    const fullName = cleanText(values[0]);
-    const travelFrom = cleanText(values[1]);
-    const attending = cleanText(values[2]);
-    const guestCount = Number(values[3] || 1);
-    const additionalGuests = cleanText(values[4]);
-    const confirmedGuests = cleanText(values[5]);
-const phone =
-  cleanText(values.find((value) => normalizePhone(value).length >= 10)) || "";
-
-const comments =
-  cleanText(values.find((value) =>
-    value &&
-    value !== fullName &&
-    value !== travelFrom &&
-    value !== attending &&
-    value !== String(guestCount) &&
-    value !== phone &&
-    normalizePhone(value).length < 10
-  )) || "";
-
+    const phone = values.find((v) => isPhone(v)) || "";
     const phoneNormalized = normalizePhone(phone);
+
+    const afterGuestCount = values.filter(
+      (v) =>
+        v !== fullName &&
+        v !== travelFrom &&
+        v !== attending &&
+        v !== String(guestCount) &&
+        v !== phone &&
+        !isPhone(v)
+    );
+
+    let additionalGuests = "";
+    let confirmedGuests = "";
+    let comments = "";
+
+    if (guestCount > 1) {
+      additionalGuests = afterGuestCount[0] || "";
+      confirmedGuests = afterGuestCount[1] || "";
+      comments = afterGuestCount[2] || "";
+    } else {
+      comments = afterGuestCount[0] || "";
+    }
 
     if (!fullName || !phoneNormalized) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Typeform submission is missing full name or phone.",
-          debug: { values }
-        },
+        { ok: false, error: "Missing full name or phone.", debug: { values } },
         { status: 400 }
       );
     }
