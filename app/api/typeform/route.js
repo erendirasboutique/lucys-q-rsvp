@@ -6,36 +6,36 @@ function answerValue(answer) {
   if (answer.type === "text") return answer.text || "";
   if (answer.type === "email") return answer.email || "";
   if (answer.type === "phone_number") return answer.phone_number || "";
-  if (answer.type === "number") return answer.number;
+  if (answer.type === "number") return String(answer.number ?? "");
   if (answer.type === "boolean") return answer.boolean ? "Sí" : "No";
   if (answer.type === "choice") return answer.choice?.label || "";
   if (answer.type === "choices") return (answer.choices?.labels || []).join(", ");
   return "";
 }
 
-function titleOf(answer) {
-  return (answer?.field?.title || "").toLowerCase();
+function normalizeTitle(text) {
+  return (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
-function findByTitle(answers, includes) {
-  const terms = includes.map((x) => x.toLowerCase());
+function findByAnyTitle(answers, phrases) {
+  const normalizedPhrases = phrases.map(normalizeTitle);
+
   const found = answers.find((answer) => {
-    const title = titleOf(answer);
-    return terms.every((term) => title.includes(term));
+    const title = normalizeTitle(answer.field?.title || "");
+    return normalizedPhrases.some((phrase) => title.includes(phrase));
   });
+
   return answerValue(found);
 }
 
-function findAttendance(answers) {
-  return (
-    cleanText(findByTitle(answers, ["vas a asistir"])) ||
-    cleanText(findByTitle(answers, ["asistir"])) ||
-    cleanText(findByTitle(answers, ["attend"]))
-  );
-}
-
 export async function GET() {
-  return NextResponse.json({ ok: true, message: "Typeform webhook route is live." });
+  return NextResponse.json({
+    ok: true,
+    message: "Typeform webhook route is live",
+  });
 }
 
 export async function POST(request) {
@@ -43,35 +43,91 @@ export async function POST(request) {
     const payload = await request.json();
     const answers = payload?.form_response?.answers || [];
 
-    const fullName = cleanText(findByTitle(answers, ["nombre completo"]));
-    const phone = cleanText(
-      findByTitle(answers, ["teléfono"]) ||
-      findByTitle(answers, ["telefono"]) ||
-      findByTitle(answers, ["phone"]) ||
-      findByTitle(answers, ["número"])
+    const fullName = cleanText(
+      findByAnyTitle(answers, [
+        "por favor ingrese su nombre completo",
+        "ingrese su nombre completo",
+        "nombre completo",
+      ])
     );
+
+    const phone = cleanText(
+      findByAnyTitle(answers, [
+        "mejor numero de telefono",
+        "numero de telefono",
+        "telefono",
+        "phone number",
+        "best phone",
+      ])
+    );
+
     const phoneNormalized = normalizePhone(phone);
 
     if (!fullName || !phoneNormalized) {
       return NextResponse.json(
-        { ok: false, error: "Typeform submission is missing full name or phone." },
+        {
+          ok: false,
+          error: "Typeform submission is missing full name or phone.",
+          debug: {
+            foundFullName: fullName,
+            foundPhone: phone,
+            receivedQuestions: answers.map((answer) => answer.field?.title || ""),
+          },
+        },
         { status: 400 }
       );
     }
 
-    const guestCountRaw = findByTitle(answers, ["cuántas personas"]);
-    const guestCount = Number(guestCountRaw || 1);
-
     const rsvp = {
       full_name: fullName,
-      travel_from: cleanText(findByTitle(answers, ["desde dónde viaja"]) || findByTitle(answers, ["donde viaja"])),
-      attending: findAttendance(answers),
-      guest_count: Number.isFinite(guestCount) && guestCount > 0 ? guestCount : 1,
-      additional_guests: cleanText(findByTitle(answers, ["invitados adicionales"])),
-      confirmed_guests: cleanText(findByTitle(answers, ["confirmar su grupo"])),
+      travel_from: cleanText(
+        findByAnyTitle(answers, [
+          "desde donde viaja",
+          "desde donde",
+          "where are you traveling",
+        ])
+      ),
+      attending: cleanText(
+        findByAnyTitle(answers, [
+          "vas a asistir",
+          "asistir a la quinceanera",
+          "asistir",
+          "attending",
+        ])
+      ),
+      guest_count: Number(
+        findByAnyTitle(answers, [
+          "cuantas personas habra",
+          "cuantas personas",
+          "personas habra",
+          "grupo",
+          "group",
+        ]) || 1
+      ),
+      additional_guests: cleanText(
+        findByAnyTitle(answers, [
+          "invitados adicionales",
+          "nombres de los invitados",
+          "additional guests",
+        ])
+      ),
+      confirmed_guests: cleanText(
+        findByAnyTitle(answers, [
+          "confirmar su grupo",
+          "confirme su grupo",
+          "confirmar",
+        ])
+      ),
       phone,
       phone_normalized: phoneNormalized,
-      comments: cleanText(findByTitle(answers, ["pregunta"]) || findByTitle(answers, ["comentario"])),
+      comments: cleanText(
+        findByAnyTitle(answers, [
+          "pregunta",
+          "comentario",
+          "comment",
+          "question",
+        ])
+      ),
       typeform_response_id: payload?.form_response?.token || null,
       updated_at: new Date().toISOString(),
     };
@@ -88,13 +144,29 @@ export async function POST(request) {
 
     if (findError) throw findError;
 
-    const result = existing?.id
-      ? await supabase.from("rsvps").update(rsvp).eq("id", existing.id).select("*").single()
-      : await supabase.from("rsvps").insert(rsvp).select("*").single();
+    let result;
+
+    if (existing?.id) {
+      result = await supabase
+        .from("rsvps")
+        .update(rsvp)
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+    } else {
+      result = await supabase
+        .from("rsvps")
+        .insert(rsvp)
+        .select("*")
+        .single();
+    }
 
     if (result.error) throw result.error;
 
-    return NextResponse.json({ ok: true, rsvp: result.data });
+    return NextResponse.json({
+      ok: true,
+      rsvp: result.data,
+    });
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error.message || "Webhook error." },
