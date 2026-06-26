@@ -14,6 +14,19 @@ const emptyForm = {
   comments: "",
 };
 
+function firstName(fullName) {
+  return (fullName || "").trim().split(" ")[0] || "";
+}
+
+function guestDisplay(rsvp) {
+  const name = firstName(rsvp.full_name);
+  const extraGuests = rsvp.additional_guests || "";
+
+  if (!extraGuests) return name;
+
+  return `${name}\n${extraGuests}`;
+}
+
 export default function HomePage() {
   const [lookup, setLookup] = useState({ full_name: "", phone: "" });
   const [rsvp, setRsvp] = useState(null);
@@ -65,6 +78,8 @@ export default function HomePage() {
     }
   }
 
+  const guestNames = rsvp ? guestDisplay(rsvp) : "";
+
   return (
     <main className="page">
       <div className="petals" aria-hidden="true">
@@ -102,7 +117,7 @@ export default function HomePage() {
                     <input
                       value={lookup.phone}
                       onChange={(e) => setLookup({ ...lookup, phone: e.target.value })}
-                      placeholder="Ej. 9091234567"
+                      placeholder="Ej. 1234567"
                       required
                     />
                   </div>
@@ -120,12 +135,13 @@ export default function HomePage() {
               <form className="form" onSubmit={saveRSVP}>
                 <div className="grid2">
                   <div className="field">
-                    <label>¿Va a asistir?</label>
+                    <label>¿Vas a asistir?</label>
                     <select
                       value={rsvp.attending || ""}
                       onChange={(e) => setRsvp({ ...rsvp, attending: e.target.value })}
                     >
                       <option value="">Seleccione una opción</option>
+                      <option value="Si/Yes">Si/Yes</option>
                       <option value="Sí">Sí</option>
                       <option value="No">No</option>
                       <option value="Tal vez">Tal vez</option>
@@ -151,20 +167,13 @@ export default function HomePage() {
                 </div>
 
                 <div className="field">
-                  <label>Invitados adicionales</label>
-                  <textarea
-                    value={rsvp.additional_guests || ""}
-                    onChange={(e) => setRsvp({ ...rsvp, additional_guests: e.target.value })}
-                    placeholder="Nombres de invitados adicionales"
-                  />
+                  <label>Invitados Adicionales</label>
+                  <textarea value={guestNames} readOnly />
                 </div>
 
                 <div className="field">
-                  <label>Confirmar su grupo</label>
-                  <textarea
-                    value={rsvp.confirmed_guests || ""}
-                    onChange={(e) => setRsvp({ ...rsvp, confirmed_guests: e.target.value })}
-                  />
+                  <label>Confirmar Su Grupo</label>
+                  <textarea value={guestNames} readOnly />
                 </div>
 
                 <div className="field">
