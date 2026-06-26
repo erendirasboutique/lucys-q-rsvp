@@ -1,8 +1,8 @@
-import './globals.css';
+import "./globals.css";
 
 export const metadata = {
-  title: "Lucy's Quinceañera RSVP Portal",
-  description: "View or update your RSVP for Lucy's Quinceañera.",
+  title: "Lucy's Quinceañera RSVP",
+  description: "RSVP portal for Lucy's Quinceañera",
 };
 
 export default function RootLayout({ children }) {

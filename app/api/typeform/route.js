@@ -13,22 +13,29 @@ function answerValue(answer) {
   return "";
 }
 
+function titleOf(answer) {
+  return (answer?.field?.title || "").toLowerCase();
+}
+
 function findByTitle(answers, includes) {
   const terms = includes.map((x) => x.toLowerCase());
-
   const found = answers.find((answer) => {
-    const title = (answer.field?.title || "").toLowerCase();
+    const title = titleOf(answer);
     return terms.every((term) => title.includes(term));
   });
-
   return answerValue(found);
 }
 
+function findAttendance(answers) {
+  return (
+    cleanText(findByTitle(answers, ["vas a asistir"])) ||
+    cleanText(findByTitle(answers, ["asistir"])) ||
+    cleanText(findByTitle(answers, ["attend"]))
+  );
+}
+
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    message: "Typeform webhook route is live",
-  });
+  return NextResponse.json({ ok: true, message: "Typeform webhook route is live." });
 }
 
 export async function POST(request) {
@@ -39,32 +46,32 @@ export async function POST(request) {
     const fullName = cleanText(findByTitle(answers, ["nombre completo"]));
     const phone = cleanText(
       findByTitle(answers, ["teléfono"]) ||
+      findByTitle(answers, ["telefono"]) ||
       findByTitle(answers, ["phone"]) ||
       findByTitle(answers, ["número"])
     );
-
     const phoneNormalized = normalizePhone(phone);
 
     if (!fullName || !phoneNormalized) {
       return NextResponse.json(
-        { error: "Missing full name or phone number." },
+        { ok: false, error: "Typeform submission is missing full name or phone." },
         { status: 400 }
       );
     }
 
+    const guestCountRaw = findByTitle(answers, ["cuántas personas"]);
+    const guestCount = Number(guestCountRaw || 1);
+
     const rsvp = {
       full_name: fullName,
-      travel_from: cleanText(findByTitle(answers, ["desde dónde viaja"])),
-      attending: cleanText(findByTitle(answers, ["vas a asistir"])),
-      guest_count: Number(findByTitle(answers, ["cuántas personas"]) || 1),
+      travel_from: cleanText(findByTitle(answers, ["desde dónde viaja"]) || findByTitle(answers, ["donde viaja"])),
+      attending: findAttendance(answers),
+      guest_count: Number.isFinite(guestCount) && guestCount > 0 ? guestCount : 1,
       additional_guests: cleanText(findByTitle(answers, ["invitados adicionales"])),
       confirmed_guests: cleanText(findByTitle(answers, ["confirmar su grupo"])),
       phone,
       phone_normalized: phoneNormalized,
-      comments: cleanText(
-        findByTitle(answers, ["pregunta"]) ||
-        findByTitle(answers, ["comentario"])
-      ),
+      comments: cleanText(findByTitle(answers, ["pregunta"]) || findByTitle(answers, ["comentario"])),
       typeform_response_id: payload?.form_response?.token || null,
       updated_at: new Date().toISOString(),
     };
@@ -81,32 +88,16 @@ export async function POST(request) {
 
     if (findError) throw findError;
 
-    let result;
-
-    if (existing?.id) {
-      result = await supabase
-        .from("rsvps")
-        .update(rsvp)
-        .eq("id", existing.id)
-        .select("*")
-        .single();
-    } else {
-      result = await supabase
-        .from("rsvps")
-        .insert(rsvp)
-        .select("*")
-        .single();
-    }
+    const result = existing?.id
+      ? await supabase.from("rsvps").update(rsvp).eq("id", existing.id).select("*").single()
+      : await supabase.from("rsvps").insert(rsvp).select("*").single();
 
     if (result.error) throw result.error;
 
-    return NextResponse.json({
-      ok: true,
-      rsvp: result.data,
-    });
+    return NextResponse.json({ ok: true, rsvp: result.data });
   } catch (error) {
     return NextResponse.json(
-      { error: error.message || "Webhook error." },
+      { ok: false, error: error.message || "Webhook error." },
       { status: 500 }
     );
   }

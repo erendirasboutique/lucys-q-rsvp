@@ -1,48 +1,43 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 
-const blankRSVP = {
-  attending: '',
-  travel_from: '',
+const emptyForm = {
+  id: "",
+  full_name: "",
+  phone: "",
+  travel_from: "",
+  attending: "",
   guest_count: 1,
-  additional_guests: '',
-  confirmed_guests: '',
-  phone: '',
-  comments: '',
+  additional_guests: "",
+  confirmed_guests: "",
+  comments: "",
 };
 
 export default function HomePage() {
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [lookup, setLookup] = useState({ full_name: "", phone: "" });
   const [rsvp, setRsvp] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState('');
+  const [message, setMessage] = useState("");
 
   async function searchRSVP(event) {
     event.preventDefault();
     setLoading(true);
-    setMessage('');
-    setMessageType('');
+    setMessage("");
     setRsvp(null);
 
     try {
-      const response = await fetch('/api/search-rsvp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName, phone }),
+      const response = await fetch("/api/search-rsvp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lookup),
       });
-
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'No pudimos encontrar su RSVP.');
-      setRsvp({ ...blankRSVP, ...data.rsvp });
-      setMessage('Encontramos su RSVP. Puede actualizarlo abajo.');
-      setMessageType('success');
+      if (!response.ok || !data.ok) throw new Error(data.error || "No pudimos encontrar su RSVP.");
+      setRsvp({ ...emptyForm, ...data.rsvp });
+      setMessage("Encontramos su RSVP. Puede hacer cambios abajo.");
     } catch (error) {
       setMessage(error.message);
-      setMessageType('error');
     } finally {
       setLoading(false);
     }
@@ -50,105 +45,152 @@ export default function HomePage() {
 
   async function saveRSVP(event) {
     event.preventDefault();
-    setSaving(true);
-    setMessage('');
-    setMessageType('');
+    setLoading(true);
+    setMessage("");
 
     try {
-      const response = await fetch('/api/update-rsvp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: rsvp.id,
-          phone,
-          updates: {
-            attending: rsvp.attending,
-            travel_from: rsvp.travel_from,
-            guest_count: Number(rsvp.guest_count || 1),
-            additional_guests: rsvp.additional_guests,
-            confirmed_guests: rsvp.confirmed_guests,
-            comments: rsvp.comments,
-          },
-        }),
+      const response = await fetch("/api/update-rsvp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rsvp),
       });
-
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'No se pudieron guardar los cambios.');
-      setRsvp({ ...rsvp, ...data.rsvp });
-      setMessage('¡Listo! Sus cambios fueron guardados.');
-      setMessageType('success');
+      if (!response.ok || !data.ok) throw new Error(data.error || "No se pudieron guardar los cambios.");
+      setRsvp({ ...emptyForm, ...data.rsvp });
+      setMessage("¡Sus cambios fueron guardados! Gracias.");
     } catch (error) {
       setMessage(error.message);
-      setMessageType('error');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   }
 
   return (
     <main className="page">
-      <div className="sparkles" aria-hidden="true"><span/><span/><span/><span/><span/><span/></div>
-      <section className="portal-card">
-        <img src="/logo.png" alt="Lucy's Quinceañera" className="logo" />
-        <p className="kicker">Portal de RSVP</p>
-        <h1>Lucy&apos;s Quinceañera</h1>
-        <p className="subtitle">Busque su RSVP con su nombre completo y número de teléfono para confirmar o actualizar su grupo.</p>
-        <div className="divider" />
+      <div className="petals" aria-hidden="true">
+        <span className="petal" /><span className="petal" /><span className="petal" />
+        <span className="petal" /><span className="petal" /><span className="petal" />
+      </div>
 
-        {!rsvp && (
-          <form className="form" onSubmit={searchRSVP}>
-            <div>
-              <label>Nombre completo</label>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ej. Maria Garcia" required />
-            </div>
-            <div>
-              <label>Número de teléfono</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Ej. 9091234567" required />
-            </div>
-            <button className="btn" disabled={loading}>{loading ? 'Buscando...' : 'Buscar mi RSVP'}</button>
-          </form>
-        )}
+      <section className="shell">
+        <div className="hero">
+          <img src="/logo.png" alt="Lucy's Quinceañera" className="logo" />
+          <div className="badge">Portal de RSVP</div>
+        </div>
 
-        {rsvp && (
-          <form className="form" onSubmit={saveRSVP}>
-            <h2 className="found-title">Hola, {rsvp.full_name}</h2>
-            <div className="grid-two">
-              <div>
-                <label>¿Va a asistir?</label>
-                <select value={rsvp.attending || ''} onChange={(e) => setRsvp({ ...rsvp, attending: e.target.value })} required>
-                  <option value="">Seleccione</option>
-                  <option value="Sí">Sí, asistiré</option>
-                  <option value="No">No podré asistir</option>
-                </select>
-              </div>
-              <div>
-                <label>Personas en su grupo</label>
-                <input type="number" min="1" max="10" value={rsvp.guest_count || 1} onChange={(e) => setRsvp({ ...rsvp, guest_count: e.target.value })} />
-              </div>
-            </div>
-            <div>
-              <label>¿Desde dónde viaja?</label>
-              <input value={rsvp.travel_from || ''} onChange={(e) => setRsvp({ ...rsvp, travel_from: e.target.value })} />
-            </div>
-            <div>
-              <label>Nombres de invitados adicionales</label>
-              <textarea value={rsvp.additional_guests || ''} onChange={(e) => setRsvp({ ...rsvp, additional_guests: e.target.value })} placeholder="Invitado 2, Invitado 3..." />
-            </div>
-            <div>
-              <label>Confirmación de grupo</label>
-              <textarea value={rsvp.confirmed_guests || ''} onChange={(e) => setRsvp({ ...rsvp, confirmed_guests: e.target.value })} />
-            </div>
-            <div>
-              <label>Preguntas o comentarios</label>
-              <textarea value={rsvp.comments || ''} onChange={(e) => setRsvp({ ...rsvp, comments: e.target.value })} />
-            </div>
-            <button className="btn" disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</button>
-            <button className="btn secondary-btn" type="button" onClick={() => { setRsvp(null); setMessage(''); }}>Buscar otro RSVP</button>
-          </form>
-        )}
+        <div className="card">
+          {!rsvp ? (
+            <>
+              <h1>Buscar RSVP</h1>
+              <p>
+                Ingrese su nombre completo y número de teléfono para ver o cambiar su respuesta.
+              </p>
 
-        {message && <p className={`message ${messageType}`}>{message}</p>}
-        <p className="footer">Con amor para la quinceañera de Lucy ✨</p>
+              <form className="form" onSubmit={searchRSVP}>
+                <div className="grid2">
+                  <div className="field">
+                    <label>Nombre completo</label>
+                    <input
+                      value={lookup.full_name}
+                      onChange={(e) => setLookup({ ...lookup, full_name: e.target.value })}
+                      placeholder="Ej. María Garcia"
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Número de teléfono</label>
+                    <input
+                      value={lookup.phone}
+                      onChange={(e) => setLookup({ ...lookup, phone: e.target.value })}
+                      placeholder="Ej. 9091234567"
+                      required
+                    />
+                  </div>
+                </div>
+                <button className="btn" disabled={loading} type="submit">
+                  {loading ? "Buscando..." : "Buscar mi RSVP"}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <h2>Hola, {rsvp.full_name}</h2>
+              <p>Actualice su RSVP para la quinceañera de Lucy.</p>
+
+              <form className="form" onSubmit={saveRSVP}>
+                <div className="grid2">
+                  <div className="field">
+                    <label>¿Va a asistir?</label>
+                    <select
+                      value={rsvp.attending || ""}
+                      onChange={(e) => setRsvp({ ...rsvp, attending: e.target.value })}
+                    >
+                      <option value="">Seleccione una opción</option>
+                      <option value="Sí">Sí</option>
+                      <option value="No">No</option>
+                      <option value="Tal vez">Tal vez</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Personas en su grupo</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={rsvp.guest_count || 1}
+                      onChange={(e) => setRsvp({ ...rsvp, guest_count: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>¿Desde dónde viaja?</label>
+                  <input
+                    value={rsvp.travel_from || ""}
+                    onChange={(e) => setRsvp({ ...rsvp, travel_from: e.target.value })}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Invitados adicionales</label>
+                  <textarea
+                    value={rsvp.additional_guests || ""}
+                    onChange={(e) => setRsvp({ ...rsvp, additional_guests: e.target.value })}
+                    placeholder="Nombres de invitados adicionales"
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Confirmar su grupo</label>
+                  <textarea
+                    value={rsvp.confirmed_guests || ""}
+                    onChange={(e) => setRsvp({ ...rsvp, confirmed_guests: e.target.value })}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Preguntas o comentarios</label>
+                  <textarea
+                    value={rsvp.comments || ""}
+                    onChange={(e) => setRsvp({ ...rsvp, comments: e.target.value })}
+                  />
+                </div>
+
+                <div className="actions">
+                  <button className="btn" disabled={loading} type="submit">
+                    {loading ? "Guardando..." : "Guardar cambios"}
+                  </button>
+                  <button className="btn secondary" type="button" onClick={() => { setRsvp(null); setMessage(""); }}>
+                    Buscar otra RSVP
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+
+          {message && <div className="message">{message}</div>}
+        </div>
+
+        <div className="footer">Con cariño, Lucy's Quinceañera</div>
       </section>
     </main>
   );

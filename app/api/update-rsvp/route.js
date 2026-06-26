@@ -1,47 +1,43 @@
-import { NextResponse } from 'next/server';
-import { getSupabaseAdmin, normalizePhone } from '../_supabase';
-
-const allowedFields = [
-  'attending',
-  'travel_from',
-  'guest_count',
-  'additional_guests',
-  'confirmed_guests',
-  'comments',
-];
+import { NextResponse } from "next/server";
+import { cleanText, getSupabaseAdmin, normalizePhone } from "../_supabase";
 
 export async function POST(request) {
   try {
-    const { id, phone, updates } = await request.json();
-    const phoneDigits = normalizePhone(phone);
+    const body = await request.json();
+    const id = cleanText(body.id);
+    const fullName = cleanText(body.full_name || body.fullName);
+    const phone = cleanText(body.phone);
+    const phoneNormalized = normalizePhone(phone);
 
-    if (!id || !phoneDigits) {
-      return NextResponse.json({ error: 'Falta información para guardar cambios.' }, { status: 400 });
+    if (!id || !fullName || !phoneNormalized) {
+      return NextResponse.json({ ok: false, error: "Missing RSVP ID, name, or phone." }, { status: 400 });
     }
 
-    const safeUpdates = {};
-    for (const field of allowedFields) {
-      if (Object.prototype.hasOwnProperty.call(updates || {}, field)) safeUpdates[field] = updates[field];
-    }
+    const update = {
+      attending: cleanText(body.attending),
+      guest_count: Number(body.guest_count || 1),
+      travel_from: cleanText(body.travel_from),
+      additional_guests: cleanText(body.additional_guests),
+      confirmed_guests: cleanText(body.confirmed_guests),
+      comments: cleanText(body.comments),
+      updated_at: new Date().toISOString(),
+    };
 
-    if (safeUpdates.guest_count !== undefined) {
-      safeUpdates.guest_count = Math.max(1, Math.min(10, Number(safeUpdates.guest_count || 1)));
-    }
-
-    safeUpdates.updated_at = new Date().toISOString();
+    if (!Number.isFinite(update.guest_count) || update.guest_count < 1) update.guest_count = 1;
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
-      .from('rsvps')
-      .update(safeUpdates)
-      .eq('id', id)
-      .eq('phone_normalized', phoneDigits)
-      .select('*')
+      .from("rsvps")
+      .update(update)
+      .eq("id", id)
+      .eq("phone_normalized", phoneNormalized)
+      .ilike("full_name", fullName)
+      .select("id, full_name, travel_from, attending, guest_count, additional_guests, confirmed_guests, phone, comments, updated_at")
       .single();
 
     if (error) throw error;
-    return NextResponse.json({ rsvp: data });
+    return NextResponse.json({ ok: true, rsvp: data });
   } catch (error) {
-    return NextResponse.json({ error: error.message || 'Error guardando RSVP.' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error.message || "Update error." }, { status: 500 });
   }
 }
