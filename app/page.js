@@ -82,6 +82,10 @@ export default function HomePage() {
 
   return (
     <main className="page">
+    <div className="sparkles" aria-hidden="true" />
+<div className="flower-petals" aria-hidden="true">
+  <span /> <span /> <span /> <span /> <span /> <span /> <span /> <span />
+</div>
       <div className="petals" aria-hidden="true">
         <span className="petal" /><span className="petal" /><span className="petal" />
         <span className="petal" /><span className="petal" /><span className="petal" />
