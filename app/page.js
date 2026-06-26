@@ -308,7 +308,20 @@ export default function HomePage() {
           {message && <div className={success ? "message success-message" : "message"}>{message}</div>}
         </div>
 
-        <div className="footer">{t.footer}</div>
+        <footer className="footer">
+  <div className="footerDivider" />
+
+  <p>{t.footer}</p>
+
+  <div className="footerLinks">
+    <a href="https://lucysquinceanera.com" target="_blank" rel="noopener noreferrer">
+      Home
+    </a>
+    <a href="https://lucysquinceanera.com" target="_blank" rel="noopener noreferrer">
+      Lucy's Quinceañera
+    </a>
+  </div>
+</footer>
       </section>
     </main>
   );
