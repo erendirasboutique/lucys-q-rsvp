@@ -13,29 +13,8 @@ function answerValue(answer) {
   return "";
 }
 
-function normalizeTitle(text) {
-  return (text || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function findByAnyTitle(answers, phrases) {
-  const normalizedPhrases = phrases.map(normalizeTitle);
-
-  const found = answers.find((answer) => {
-    const title = normalizeTitle(answer.field?.title || "");
-    return normalizedPhrases.some((phrase) => title.includes(phrase));
-  });
-
-  return answerValue(found);
-}
-
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    message: "Typeform webhook route is live",
-  });
+  return NextResponse.json({ ok: true, message: "Typeform webhook route is live" });
 }
 
 export async function POST(request) {
@@ -43,23 +22,16 @@ export async function POST(request) {
     const payload = await request.json();
     const answers = payload?.form_response?.answers || [];
 
-    const fullName = cleanText(
-      findByAnyTitle(answers, [
-        "por favor ingrese su nombre completo",
-        "ingrese su nombre completo",
-        "nombre completo",
-      ])
-    );
+    const values = answers.map(answerValue);
 
-    const phone = cleanText(
-      findByAnyTitle(answers, [
-        "mejor numero de telefono",
-        "numero de telefono",
-        "telefono",
-        "phone number",
-        "best phone",
-      ])
-    );
+    const fullName = cleanText(values[0]);
+    const travelFrom = cleanText(values[1]);
+    const attending = cleanText(values[2]);
+    const guestCount = Number(values[3] || 1);
+    const additionalGuests = cleanText(values[4]);
+    const confirmedGuests = cleanText(values[5]);
+    const phone = cleanText(values[6]);
+    const comments = cleanText(values[7]);
 
     const phoneNormalized = normalizePhone(phone);
 
@@ -68,11 +40,7 @@ export async function POST(request) {
         {
           ok: false,
           error: "Typeform submission is missing full name or phone.",
-          debug: {
-            foundFullName: fullName,
-            foundPhone: phone,
-            receivedQuestions: answers.map((answer) => answer.field?.title || ""),
-          },
+          debug: { values }
         },
         { status: 400 }
       );
@@ -80,61 +48,21 @@ export async function POST(request) {
 
     const rsvp = {
       full_name: fullName,
-      travel_from: cleanText(
-        findByAnyTitle(answers, [
-          "desde donde viaja",
-          "desde donde",
-          "where are you traveling",
-        ])
-      ),
-      attending: cleanText(
-        findByAnyTitle(answers, [
-          "vas a asistir",
-          "asistir a la quinceanera",
-          "asistir",
-          "attending",
-        ])
-      ),
-      guest_count: Number(
-        findByAnyTitle(answers, [
-          "cuantas personas habra",
-          "cuantas personas",
-          "personas habra",
-          "grupo",
-          "group",
-        ]) || 1
-      ),
-      additional_guests: cleanText(
-        findByAnyTitle(answers, [
-          "invitados adicionales",
-          "nombres de los invitados",
-          "additional guests",
-        ])
-      ),
-      confirmed_guests: cleanText(
-        findByAnyTitle(answers, [
-          "confirmar su grupo",
-          "confirme su grupo",
-          "confirmar",
-        ])
-      ),
+      travel_from: travelFrom,
+      attending,
+      guest_count: guestCount,
+      additional_guests: additionalGuests,
+      confirmed_guests: confirmedGuests,
       phone,
       phone_normalized: phoneNormalized,
-      comments: cleanText(
-        findByAnyTitle(answers, [
-          "pregunta",
-          "comentario",
-          "comment",
-          "question",
-        ])
-      ),
+      comments,
       typeform_response_id: payload?.form_response?.token || null,
       updated_at: new Date().toISOString(),
     };
 
     const supabase = getSupabaseAdmin();
 
-    const { data: existing, error: findError } = await supabase
+    const { data: existing } = await supabase
       .from("rsvps")
       .select("id")
       .eq("phone_normalized", phoneNormalized)
@@ -142,31 +70,13 @@ export async function POST(request) {
       .limit(1)
       .maybeSingle();
 
-    if (findError) throw findError;
-
-    let result;
-
-    if (existing?.id) {
-      result = await supabase
-        .from("rsvps")
-        .update(rsvp)
-        .eq("id", existing.id)
-        .select("*")
-        .single();
-    } else {
-      result = await supabase
-        .from("rsvps")
-        .insert(rsvp)
-        .select("*")
-        .single();
-    }
+    const result = existing?.id
+      ? await supabase.from("rsvps").update(rsvp).eq("id", existing.id).select("*").single()
+      : await supabase.from("rsvps").insert(rsvp).select("*").single();
 
     if (result.error) throw result.error;
 
-    return NextResponse.json({
-      ok: true,
-      rsvp: result.data,
-    });
+    return NextResponse.json({ ok: true, rsvp: result.data });
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error.message || "Webhook error." },
