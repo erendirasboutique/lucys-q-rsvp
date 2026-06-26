@@ -310,6 +310,298 @@ th { color: var(--accent); white-space: nowrap; }
   .footerLinks a { width: 82%; max-width: 260px; }
   th, td { font-size: 13px; padding: 9px; }
 }
+/* ===== Countdown, Status Badge, Confetti, Tables, and Check-in Upgrades ===== */
+ 
+.countdownCard {
+  width: min(100%, 520px);
+  margin: 18px auto 0;
+  padding: 16px;
+  border-radius: 24px;
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(227,10,122,.16);
+  box-shadow: 0 16px 38px rgba(227,10,122,.12);
+  backdrop-filter: blur(16px);
+}
+ 
+.countdownCard p {
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-weight: 700;
+  text-align: center;
+}
+ 
+.countdownGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+ 
+.countdownGrid div {
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(227,10,122,.12);
+  border-radius: 18px;
+  padding: 12px 8px;
+  text-align: center;
+}
+ 
+.countdownGrid strong {
+  display: block;
+  color: var(--accent);
+  font-size: 26px;
+  line-height: 1;
+}
+ 
+.countdownGrid span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px;
+}
+ 
+.personalGreeting {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+ 
+.personalGreeting h2 {
+  margin-bottom: 4px;
+}
+ 
+.personalGreeting p {
+  margin: 0;
+}
+ 
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 800;
+  border: 1px solid rgba(255,255,255,.7);
+  box-shadow: 0 10px 26px rgba(0,0,0,.08);
+  white-space: nowrap;
+}
+ 
+.status-yes {
+  background: rgba(63, 171, 92, .16);
+  color: #217a3d;
+}
+ 
+.status-no {
+  background: rgba(176, 0, 64, .12);
+  color: #b00040;
+}
+ 
+.status-pending {
+  background: rgba(255, 196, 87, .24);
+  color: #9a6500;
+}
+ 
+.guestMeta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 16px 0 22px;
+}
+ 
+.guestMeta div {
+  background: rgba(255,255,255,.76);
+  border: 1px solid rgba(227,10,122,.14);
+  border-radius: 20px;
+  padding: 16px;
+}
+ 
+.guestMeta span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+ 
+.guestMeta strong {
+  display: block;
+  color: var(--accent);
+  font-size: 24px;
+}
+ 
+.confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  overflow: hidden;
+}
+ 
+.confetti span {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  width: 10px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--accent);
+  animation: confettiFall 2.4s ease-in forwards;
+}
+ 
+.confetti span:nth-child(3n) { background: #ffffff; }
+.confetti span:nth-child(4n) { background: #ff9cca; }
+.confetti span:nth-child(5n) { background: #f5d1e1; }
+ 
+.confetti span:nth-child(1) { left: 5%; animation-delay: .05s; }
+.confetti span:nth-child(2) { left: 9%; animation-delay: .18s; }
+.confetti span:nth-child(3) { left: 14%; animation-delay: .02s; }
+.confetti span:nth-child(4) { left: 18%; animation-delay: .22s; }
+.confetti span:nth-child(5) { left: 22%; animation-delay: .09s; }
+.confetti span:nth-child(6) { left: 28%; animation-delay: .16s; }
+.confetti span:nth-child(7) { left: 33%; animation-delay: .04s; }
+.confetti span:nth-child(8) { left: 38%; animation-delay: .25s; }
+.confetti span:nth-child(9) { left: 44%; animation-delay: .12s; }
+.confetti span:nth-child(10) { left: 50%; animation-delay: .2s; }
+.confetti span:nth-child(11) { left: 54%; animation-delay: .03s; }
+.confetti span:nth-child(12) { left: 58%; animation-delay: .19s; }
+.confetti span:nth-child(13) { left: 63%; animation-delay: .08s; }
+.confetti span:nth-child(14) { left: 68%; animation-delay: .28s; }
+.confetti span:nth-child(15) { left: 72%; animation-delay: .13s; }
+.confetti span:nth-child(16) { left: 76%; animation-delay: .07s; }
+.confetti span:nth-child(17) { left: 80%; animation-delay: .21s; }
+.confetti span:nth-child(18) { left: 84%; animation-delay: .11s; }
+.confetti span:nth-child(19) { left: 88%; animation-delay: .17s; }
+.confetti span:nth-child(20) { left: 92%; animation-delay: .06s; }
+ 
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-30px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+ 
+.checkinBox,
+.tablesSection {
+  margin: 24px 0;
+  background: rgba(255,255,255,.62);
+  border: 1px solid rgba(227,10,122,.16);
+  border-radius: 24px;
+  padding: 20px;
+}
+ 
+.checkinBox h2,
+.tablesSection h2 {
+  margin-top: 0;
+}
+ 
+.checkinResults {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+ 
+.checkinCard {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(227,10,122,.12);
+  border-radius: 18px;
+  padding: 14px;
+}
+ 
+.checkinCard.checked {
+  background: rgba(63, 171, 92, .13);
+}
+ 
+.checkinCard strong,
+.checkinCard span,
+.checkinCard small {
+  display: block;
+}
+ 
+.checkinCard span {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+ 
+.tableCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+ 
+.tableCard {
+  background: rgba(255,255,255,.82);
+  border: 1px solid rgba(227,10,122,.12);
+  border-radius: 20px;
+  padding: 16px;
+}
+ 
+.tableCard strong {
+  color: var(--accent);
+  font-size: 20px;
+}
+ 
+.tableCard span {
+  display: block;
+  color: var(--muted);
+  margin: 4px 0 10px;
+}
+ 
+.tableCard ul {
+  margin: 0;
+  padding-left: 18px;
+}
+ 
+@media (max-width: 760px) {
+  .countdownCard {
+    margin-top: 14px;
+    padding: 12px;
+  }
+ 
+  .countdownGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+ 
+  .guestMeta {
+    grid-template-columns: 1fr;
+  }
+ 
+  .personalGreeting {
+    display: block;
+  }
+ 
+  .status-badge {
+    margin-top: 12px;
+  }
+ 
+  .checkinCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+ 
+  .checkinCard .mini-btn {
+    width: 100%;
+  }
+}
+ 
+@media print {
+  .countdownCard,
+  .confetti,
+  .checkinBox {
+    display: none !important;
+  }
+}
 
 @media print {
   .no-print, .hero, .footer, .actions, .message, .sparkles, .flower-petals, .modal { display: none !important; }
