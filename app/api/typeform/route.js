@@ -30,8 +30,19 @@ export async function POST(request) {
     const guestCount = Number(values[3] || 1);
     const additionalGuests = cleanText(values[4]);
     const confirmedGuests = cleanText(values[5]);
-    const phone = cleanText(values[6]);
-    const comments = cleanText(values[7]);
+const phone =
+  cleanText(values.find((value) => normalizePhone(value).length >= 10)) || "";
+
+const comments =
+  cleanText(values.find((value) =>
+    value &&
+    value !== fullName &&
+    value !== travelFrom &&
+    value !== attending &&
+    value !== String(guestCount) &&
+    value !== phone &&
+    normalizePhone(value).length < 10
+  )) || "";
 
     const phoneNormalized = normalizePhone(phone);
 
