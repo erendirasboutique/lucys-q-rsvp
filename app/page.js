@@ -1,7 +1,10 @@
+
 "use client";
-
-import { useRef, useState } from "react";
-
+ 
+import { useEffect, useRef, useState } from "react";
+ 
+const EVENT_DATE = "2027-01-04T17:00:00"; // Change the time if needed.
+ 
 const emptyForm = {
   id: "",
   full_name: "",
@@ -12,25 +15,37 @@ const emptyForm = {
   additional_guests: "",
   confirmed_guests: "",
   comments: "",
+  table_number: "",
+  checkin_code: "",
+  checked_in: false,
+  checked_in_at: "",
 };
-
+ 
 const text = {
   es: {
     badge: "Portal de RSVP",
     language: "Idioma",
+    countdownTitle: "Faltan para la Quinceañera",
+    days: "Días",
+    hours: "Horas",
+    minutes: "Min",
+    seconds: "Seg",
     searchTitle: "Buscar RSVP",
     searchIntro: "Ingrese su nombre completo y número de teléfono para ver o cambiar su respuesta.",
     fullName: "Nombre completo",
     phone: "Número de teléfono",
     phoneHelp: "Puede usar solo los últimos 7 números.",
     namePlaceholder: "Ej. Maria Garcia",
-    phonePlaceholder: "Ej. 9091234567",
+    phonePlaceholder: "Ej. 1234567",
     searchBtn: "Buscar mi RSVP",
-    searching: "Buscando...",
-    found: "Encontramos su RSVP!. Puede hacer cambios abajo.",
+    found: "Encontramos su RSVP. Puede hacer cambios abajo.",
     notFound: "No pudimos encontrar su RSVP.",
-    hello: "Hola",
+    greeting: "Bienvenida",
+    greetingText: "Estamos muy emocionados de celebrar contigo.",
     editIntro: "Actualice su RSVP para la Quinceañera de Lucy.",
+    statusConfirmed: "Confirmado",
+    statusDeclined: "No asistirá",
+    statusPending: "Pendiente",
     attending: "¿Vas a asistir?",
     selectOption: "Seleccione una opción",
     yes: "Sí",
@@ -41,8 +56,11 @@ const text = {
     additionalGuests: "Invitados Adicionales",
     confirmGroup: "Confirmar Su Grupo",
     comments: "Preguntas o comentarios",
+    tableNumber: "Mesa",
+    checkinCode: "Código de entrada",
+    checkinHelp: "Muestre este código al llegar a la fiesta.",
+    checkedIn: "Ya registrado en la entrada",
     save: "Guardar cambios",
-    saving: "Guardando...",
     saved: "¡Sus cambios fueron guardados! Gracias.",
     another: "Buscar otra RSVP",
     footer: "Con cariño, Lucy's Quinceañera",
@@ -54,19 +72,27 @@ const text = {
   en: {
     badge: "RSVP Portal",
     language: "Language",
+    countdownTitle: "Countdown to the Quinceañera",
+    days: "Days",
+    hours: "Hours",
+    minutes: "Min",
+    seconds: "Sec",
     searchTitle: "Find RSVP",
     searchIntro: "Enter your full name and phone number to view or update your RSVP.",
     fullName: "Full Name",
     phone: "Phone Number",
     phoneHelp: "You can use only the last 7 numbers.",
     namePlaceholder: "Ex. Maria Garcia",
-    phonePlaceholder: "Ex. 9091234567",
+    phonePlaceholder: "Ex. 1234567",
     searchBtn: "Find My RSVP",
-    searching: "Searching...",
-    found: "We found your RSVP!. You can make changes below.",
+    found: "We found your RSVP. You can make changes below.",
     notFound: "We could not find your RSVP.",
-    hello: "Hello",
+    greeting: "Welcome",
+    greetingText: "We are so excited to celebrate with you.",
     editIntro: "Update your RSVP for Lucy's quinceañera.",
+    statusConfirmed: "Confirmed",
+    statusDeclined: "Not Attending",
+    statusPending: "Pending",
     attending: "Are you attending?",
     selectOption: "Select an option",
     yes: "Yes",
@@ -77,8 +103,11 @@ const text = {
     additionalGuests: "Additional Guests",
     confirmGroup: "Confirm Your Group",
     comments: "Questions or comments",
+    tableNumber: "Table",
+    checkinCode: "Check-in Code",
+    checkinHelp: "Show this code when you arrive at the party.",
+    checkedIn: "Already checked in",
     save: "Save changes",
-    saving: "Saving...",
     saved: "Your changes were saved! Thank you.",
     another: "Find another RSVP",
     footer: "With love, Lucy's Quinceañera",
@@ -88,37 +117,71 @@ const text = {
     soundOff: "Mute",
   },
 };
-
+ 
 function firstName(fullName) {
   return (fullName || "").trim().split(" ")[0] || "";
 }
-
+ 
 function guestDisplay(rsvp) {
   const name = firstName(rsvp.full_name);
   const extraGuests = rsvp.additional_guests || "";
   if (!extraGuests) return name;
   return `${name}\n${extraGuests}`;
 }
-
+ 
+function statusInfo(attending, t) {
+  const value = String(attending || "").toLowerCase();
+  if (value.includes("no")) return { label: t.statusDeclined, className: "status-badge status-no" };
+  if (value.includes("si") || value.includes("sí") || value.includes("yes")) {
+    return { label: t.statusConfirmed, className: "status-badge status-yes" };
+  }
+  return { label: t.statusPending, className: "status-badge status-pending" };
+}
+ 
+function getCountdown() {
+  const now = new Date().getTime();
+  const event = new Date(EVENT_DATE).getTime();
+  const distance = Math.max(event - now, 0);
+ 
+  return {
+    days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((distance / (1000 * 60 * 60)) % 24),
+    minutes: Math.floor((distance / (1000 * 60)) % 60),
+    seconds: Math.floor((distance / 1000) % 60),
+  };
+}
+ 
 export default function HomePage() {
   const [lang, setLang] = useState("es");
   const t = text[lang];
-
+ 
   const [lookup, setLookup] = useState({ full_name: "", phone: "" });
   const [rsvp, setRsvp] = useState(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [confetti, setConfetti] = useState(false);
   const [message, setMessage] = useState("");
   const [videoMuted, setVideoMuted] = useState(true);
+  const [countdown, setCountdown] = useState(getCountdown());
   const videoRef = useRef(null);
-
+ 
+  useEffect(() => {
+    const timer = setInterval(() => setCountdown(getCountdown()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+ 
+  function fireConfetti() {
+    setConfetti(true);
+    setTimeout(() => setConfetti(false), 2600);
+  }
+ 
   async function searchRSVP(event) {
     event.preventDefault();
     setLoading(true);
     setSuccess(false);
     setMessage("");
     setRsvp(null);
-
+ 
     try {
       const response = await fetch("/api/search-rsvp", {
         method: "POST",
@@ -135,13 +198,13 @@ export default function HomePage() {
       setLoading(false);
     }
   }
-
+ 
   async function saveRSVP(event) {
     event.preventDefault();
     setLoading(true);
     setSuccess(false);
     setMessage("");
-
+ 
     try {
       const response = await fetch("/api/update-rsvp", {
         method: "POST",
@@ -152,6 +215,7 @@ export default function HomePage() {
       if (!response.ok || !data.ok) throw new Error(data.error || "Could not save changes.");
       setRsvp({ ...emptyForm, ...data.rsvp });
       setSuccess(true);
+      fireConfetti();
       setMessage(t.saved);
     } catch (error) {
       setMessage(error.message);
@@ -159,7 +223,7 @@ export default function HomePage() {
       setLoading(false);
     }
   }
-
+ 
   async function toggleVideoSound() {
     const video = videoRef.current;
     if (!video) return;
@@ -169,23 +233,30 @@ export default function HomePage() {
     try {
       await video.play();
     } catch (error) {
-      // Some browsers require another tap before audio/video can play.
+      // Some browsers require a tap before audio/video can play.
     }
   }
-
+ 
   const guestNames = rsvp ? guestDisplay(rsvp) : "";
-
+  const status = rsvp ? statusInfo(rsvp.attending, t) : null;
+ 
   return (
     <main className="page luxury-page">
       <div className="sparkles" aria-hidden="true" />
       <div className="flower-petals" aria-hidden="true">
         <span /><span /><span /><span /><span /><span /><span /><span /><span /><span />
       </div>
-
+ 
+      {confetti && (
+        <div className="confetti" aria-hidden="true">
+          {Array.from({ length: 28 }).map((_, index) => <span key={index} />)}
+        </div>
+      )}
+ 
       <section className="shell fade-in">
         <div className="hero">
           <img src="/logo.png" alt="Lucy's Quinceañera" className="logo" />
-
+ 
           <div className="heroBadges">
             <div className="badge">{t.badge}</div>
             <div className="language-switch">
@@ -196,7 +267,17 @@ export default function HomePage() {
               </select>
             </div>
           </div>
-
+ 
+          <div className="countdownCard">
+            <p>{t.countdownTitle}</p>
+            <div className="countdownGrid">
+              <div><strong>{countdown.days}</strong><span>{t.days}</span></div>
+              <div><strong>{countdown.hours}</strong><span>{t.hours}</span></div>
+              <div><strong>{countdown.minutes}</strong><span>{t.minutes}</span></div>
+              <div><strong>{countdown.seconds}</strong><span>{t.seconds}</span></div>
+            </div>
+          </div>
+ 
           {!rsvp && (
             <div className="videoBox">
               <video
@@ -214,13 +295,13 @@ export default function HomePage() {
             </div>
           )}
         </div>
-
+ 
         <div className="card glass-card">
           {!rsvp ? (
             <>
               <h1>{t.searchTitle}</h1>
               <p>{t.searchIntro}</p>
-
+ 
               <form className="form" onSubmit={searchRSVP}>
                 <div className="grid2">
                   <div className="field">
@@ -232,7 +313,7 @@ export default function HomePage() {
                       required
                     />
                   </div>
-
+ 
                   <div className="field">
                     <label>{t.phone}</label>
                     <input
@@ -244,7 +325,7 @@ export default function HomePage() {
                     <small>{t.phoneHelp}</small>
                   </div>
                 </div>
-
+ 
                 <button className="btn" disabled={loading} type="submit">
                   {loading ? <span className="loader" /> : t.searchBtn}
                 </button>
@@ -252,16 +333,33 @@ export default function HomePage() {
             </>
           ) : (
             <>
-              <h2>{t.hello}, {rsvp.full_name}</h2>
-              <p>{t.editIntro}</p>
-
+              <div className="personalGreeting">
+                <div>
+                  <h2>✨ {t.greeting}, {firstName(rsvp.full_name)}!</h2>
+                  <p>{t.greetingText}</p>
+                </div>
+                {status && <div className={status.className}>{status.label}</div>}
+              </div>
+ 
               {success && (
                 <div className="success-screen">
                   <div className="success-check">✓</div>
                   <strong>{t.saved}</strong>
                 </div>
               )}
-
+ 
+              <div className="guestMeta">
+                <div>
+                  <span>{t.tableNumber}</span>
+                  <strong>{rsvp.table_number || "TBD"}</strong>
+                </div>
+                <div>
+                  <span>{t.checkinCode}</span>
+                  <strong>{rsvp.checkin_code || "Pending"}</strong>
+                  <small>{rsvp.checked_in ? t.checkedIn : t.checkinHelp}</small>
+                </div>
+              </div>
+ 
               <form className="form" onSubmit={saveRSVP}>
                 <div className="grid2">
                   <div className="field">
@@ -277,7 +375,7 @@ export default function HomePage() {
                       <option value="Tal vez">{t.maybe}</option>
                     </select>
                   </div>
-
+ 
                   <div className="field">
                     <label>{t.groupCount}</label>
                     <input
@@ -288,7 +386,7 @@ export default function HomePage() {
                     />
                   </div>
                 </div>
-
+ 
                 <div className="field">
                   <label>{t.travelFrom}</label>
                   <input
@@ -296,17 +394,17 @@ export default function HomePage() {
                     onChange={(e) => setRsvp({ ...rsvp, travel_from: e.target.value })}
                   />
                 </div>
-
+ 
                 <div className="field">
                   <label>{t.additionalGuests}</label>
                   <textarea value={guestNames} readOnly />
                 </div>
-
+ 
                 <div className="field">
                   <label>{t.confirmGroup}</label>
                   <textarea value={guestNames} readOnly />
                 </div>
-
+ 
                 <div className="field">
                   <label>{t.comments}</label>
                   <textarea
@@ -314,7 +412,7 @@ export default function HomePage() {
                     onChange={(e) => setRsvp({ ...rsvp, comments: e.target.value })}
                   />
                 </div>
-
+ 
                 <div className="actions">
                   <button className="btn" disabled={loading} type="submit">
                     {loading ? <span className="loader" /> : t.save}
@@ -334,10 +432,10 @@ export default function HomePage() {
               </form>
             </>
           )}
-
+ 
           {message && <div className={success ? "message success-message" : "message"}>{message}</div>}
         </div>
-
+ 
         <footer className="footer">
           <div className="footerDivider" />
           <p>{t.footer}</p>
