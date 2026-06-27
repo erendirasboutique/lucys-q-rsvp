@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
 import { cleanText, getSupabaseAdmin, normalizePhone } from "../_supabase";
 
+const REFS = {
+  fullName: "f5dd5c4e-635c-477f-aba0-0b74a03a3e01",
+  travelFrom: "005ac1d0-68a4-4cc9-ba32-d0974a03f222",
+  attending: "affad57e-f25e-4a7c-ae8a-4c951c054561",
+  guestCount: "f09b5c17-0c14-45aa-b9e4-925cf15c5dfb",
+  guests: [
+    "f31a1607-c8af-46b0-966e-fe891a42e754",
+    "051023f1-227a-4314-9864-319545ed7ffa",
+    "289077df-4aff-4311-8402-8e6a2ad86b5d",
+    "58ebd28e-a404-4375-972a-f33f800fce82",
+    "54297145-92c2-4e15-bbd9-3b0e6cb2ee21",
+  ],
+  confirmGroup: "64b2a037-78c2-422a-a0cb-cb03128c404f",
+  phone: "4db6e773-41d7-4d52-a21f-980502147a34",
+};
+
 function answerValue(answer) {
   if (!answer) return "";
   if (answer.type === "text") return answer.text || "";
@@ -13,19 +29,13 @@ function answerValue(answer) {
   return "";
 }
 
-function normalizeText(value) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function looksLikePhone(value) {
-  return normalizePhone(value).length >= 7;
+function byRef(answers, ref) {
+  const found = answers.find((answer) => answer.field?.ref === ref);
+  return cleanText(answerValue(found));
 }
 
 function makeCheckinCode(fullName, phoneNormalized) {
-  const digits = phoneNormalized.slice(-4) || Math.floor(1000 + Math.random() * 9000);
+  const digits = phoneNormalized.slice(-4);
   const initials = cleanText(fullName)
     .split(" ")
     .map((part) => part[0])
@@ -33,7 +43,7 @@ function makeCheckinCode(fullName, phoneNormalized) {
     .toUpperCase()
     .slice(0, 3);
 
-  return `LUCY-${initials || "G"}-${digits}`;
+  return `LUCY-${initials || "G"}-${digits || Math.floor(1000 + Math.random() * 9000)}`;
 }
 
 export async function GET() {
@@ -47,57 +57,30 @@ export async function POST(request) {
   try {
     const payload = await request.json();
     const answers = payload?.form_response?.answers || [];
-    const allValues = answers.map(answerValue).map(cleanText).filter(Boolean);
 
-    const fullName = allValues[0] || "";
-    const travelFrom = allValues[1] || "";
-    const attending = allValues[2] || "";
-
-    const guestCountIndex = allValues.findIndex((value) => {
-      const num = Number(value);
-      return Number.isFinite(num) && num >= 1 && num <= 20;
-    });
-
-    const guestCountRaw = guestCountIndex >= 0 ? allValues[guestCountIndex] : "1";
+    const fullName = byRef(answers, REFS.fullName);
+    const travelFrom = byRef(answers, REFS.travelFrom);
+    const attending = byRef(answers, REFS.attending);
+    const guestCountRaw = byRef(answers, REFS.guestCount);
     const guest_count = Number(guestCountRaw || 1);
 
-    const phoneIndex = allValues.findIndex((value) => looksLikePhone(value));
-    const phone = phoneIndex >= 0 ? allValues[phoneIndex] : "";
+    const phone = byRef(answers, REFS.phone);
     const phone_normalized = normalizePhone(phone);
 
-    const comments =
-      phoneIndex >= 0 && phoneIndex + 1 < allValues.length
-        ? allValues.slice(phoneIndex + 1).join("\n")
-        : "";
+    const guestNames = REFS.guests
+      .map((ref) => byRef(answers, ref))
+      .filter(Boolean);
 
-    const guestNameAnswers =
-      guestCountIndex >= 0 && phoneIndex > guestCountIndex
-        ? allValues
-            .slice(guestCountIndex + 1, phoneIndex)
-            .filter((value) => {
-              const normalized = normalizeText(value);
-              return (
-                value &&
-                value !== fullName &&
-                value !== phone &&
-                value !== travelFrom &&
-                value !== attending &&
-                value !== guestCountRaw &&
-                !looksLikePhone(value) &&
-                !normalized.includes("todo se ve bien")
-              );
-            })
-        : [];
+    const additional_guests = guestNames.join("\n");
+    const confirmed_guests = [fullName, ...guestNames].filter(Boolean).join("\n");
 
-    const additional_guests = guestNameAnswers.join("\n");
-    const confirmed_guests = [fullName, ...guestNameAnswers].filter(Boolean).join("\n");
+    const comments = "";
 
     if (!fullName || !phone_normalized) {
       return NextResponse.json(
         {
           ok: false,
           error: "Typeform submission is missing full name or phone.",
-          debug: { allValues, guestCountIndex, phoneIndex },
         },
         { status: 400 }
       );
