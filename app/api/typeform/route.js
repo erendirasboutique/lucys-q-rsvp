@@ -75,7 +75,7 @@ export async function POST(request) {
     const additional_guests = guestNames.join("\n");
     const confirmed_guests = [fullName, ...guestNames].filter(Boolean).join("\n");
 
-    const comments = "";
+    const comments = byRef(answers, REFS.comments);
 
     if (!fullName || !phone_normalized) {
       return NextResponse.json(
