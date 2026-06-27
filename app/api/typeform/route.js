@@ -15,6 +15,7 @@ const REFS = {
   ],
   confirmGroup: "64b2a037-78c2-422a-a0cb-cb03128c404f",
   phone: "4db6e773-41d7-4d52-a21f-980502147a34",
+  comments: "30f15be4-92ce-4553-ba3f-e67cc679a59a",
 };
 
 function answerValue(answer) {
