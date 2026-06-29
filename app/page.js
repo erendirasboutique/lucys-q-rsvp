@@ -82,7 +82,7 @@ const text = {
     phone: "Phone Number",
     phoneHelp: "You can use only the last 7 numbers.",
     namePlaceholder: "Ex. Maria Garcia",
-    phonePlaceholder: "Ex. 1234567",
+    phonePlaceholder: "Ex. 9091234567",
     searchBtn: "Find My RSVP",
     found: "We found your RSVP. You can make changes below.",
     notFound: "We could not find your RSVP.",
