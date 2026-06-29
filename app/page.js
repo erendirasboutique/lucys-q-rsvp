@@ -1,4 +1,3 @@
-
 "use client";
  
 import { useEffect, useRef, useState } from "react";
@@ -15,10 +14,6 @@ const emptyForm = {
   additional_guests: "",
   confirmed_guests: "",
   comments: "",
-table_number: "",
-checkin_code: "",
-checked_in: false,
-checked_in_at: "",
   table_number: "",
   checkin_code: "",
   checked_in: false,
@@ -173,12 +168,46 @@ export default function HomePage() {
     const timer = setInterval(() => setCountdown(getCountdown()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (code) {
+      searchByCode(code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
  
   function fireConfetti() {
     setConfetti(true);
     setTimeout(() => setConfetti(false), 2600);
   }
  
+  async function searchByCode(code) {
+    setLoading(true);
+    setSuccess(false);
+    setMessage("");
+    setRsvp(null);
+
+    try {
+      const response = await fetch("/api/search-rsvp-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || t.notFound);
+
+      setRsvp({ ...emptyForm, ...data.rsvp });
+      setMessage(t.found);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function searchRSVP(event) {
     event.preventDefault();
     setLoading(true);
@@ -389,17 +418,7 @@ export default function HomePage() {
                       onChange={(e) => setRsvp({ ...rsvp, guest_count: Number(e.target.value) })}
                     />
                   </div>
-              <div className="rsvp-info-row">
-  <div className="info-pill">
-    <span>🎉 Table Assignment</span>
-    <strong>{rsvp.table_number || "Coming Soon"}</strong>
-  </div>
 
-  <div className="info-pill">
-    <span>🎟 Check-In Code</span>
-    <strong>{rsvp.checkin_code || "Coming Soon"}</strong>
-  </div>
-</div>       
                 </div>
  
                 <div className="field">
@@ -463,3 +482,4 @@ export default function HomePage() {
     </main>
   );
 }
+
