@@ -1,0 +1,2 @@
+import { PageShell, Hero, Section, Cards } from '../components';import { site } from '../data';
+export default function Page(){return <PageShell><Hero eyebrow="Contact" title="Need Help?" text="A simple contact page for guests who need assistance."/><Section kicker="Reach Out" title="Contact information"><Cards items={[["Phone",site.phone],["Email",site.email],["RSVP Help","Use the RSVP portal to update your response."]]}/></Section></PageShell>}

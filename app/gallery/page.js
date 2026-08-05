@@ -1,0 +1,2 @@
+import { PageShell, Hero, Section, Placeholder } from '../components';
+export default function Page(){return <PageShell><Hero eyebrow="Gallery" title="Memories" text="A beautiful gallery for Lucy's photos, professional portraits, and behind-the-scenes moments."/><Section kicker="Photos" title="Gallery coming soon"><div className="galleryGrid"><Placeholder label="Photo 1"/><Placeholder label="Photo 2"/><Placeholder label="Photo 3"/><Placeholder label="Photo 4"/><Placeholder label="Photo 5"/><Placeholder label="Photo 6"/></div></Section></PageShell>}

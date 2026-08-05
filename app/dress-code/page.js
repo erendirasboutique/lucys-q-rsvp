@@ -1,0 +1,2 @@
+import { PageShell, Hero, Section, Cards } from '../components';
+export default function Page(){return <PageShell><Hero eyebrow="Dress Code" title="Formal Attire" text="A polished guide so guests know exactly what to wear."/><Section kicker="Style Guide" title="What to wear"><Cards items={[["Ladies","Cocktail dresses or evening gowns are recommended."],["Gentlemen","Suit, dress shirt, or formal attire."],["Colors","Add preferred colors or colors to avoid here."]]}/></Section></PageShell>}

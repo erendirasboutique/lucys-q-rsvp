@@ -1,0 +1,2 @@
+import { PageShell, Hero, Section, Cards } from '../components';
+export default function Page(){return <PageShell><Hero eyebrow="Gifts" title="Your Presence Is A Gift" text="A simple, elegant place for gift or registry information if you decide to include it."/><Section kicker="Gift Info" title="Thank you"><Cards items={[["Presence","Your presence at Lucy's celebration means so much."],["Card Box","Add card box or gift table details here."],["Registry","Add registry link if needed later."]]}/></Section></PageShell>}

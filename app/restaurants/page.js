@@ -1,0 +1,2 @@
+import { PageShell, Hero, Section, Cards } from '../components';
+export default function Page(){return <PageShell><Hero eyebrow="Restaurants" title="Local Favorites" text="A helpful guide for guests visiting from out of town."/><Section kicker="Nearby" title="Places to eat"><Cards items={[["Breakfast","Add nearby breakfast spots."],["Mexican Food","Add family favorites."],["Coffee & Dessert","Add cafes and dessert places."]]}/></Section></PageShell>}

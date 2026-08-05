@@ -1,0 +1,2 @@
+import { PageShell, Hero, Section } from '../components';import { schedule } from '../data';
+export default function Page(){return <PageShell><Hero eyebrow="Event Details" title="The Celebration" text="Date, time, schedule, and important guest information for Lucy's special day."/><Section kicker="Schedule" title="Event Timeline"><div className="timeline">{schedule.map(([time,event])=><div className="timelineItem" key={time}><strong>{time}</strong><span>{event}</span></div>)}</div></Section></PageShell>}

@@ -1,0 +1,1 @@
+Place lttrecoleta.otf in this folder so the site can load the custom font locally.
