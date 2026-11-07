@@ -1,37 +1,28 @@
-# Lucy XV — SMS as an Admin Tab
+# Lucy’s Quinceañera — clean RSVP repository
 
-This patch uses the exact `app/admin/page.js` supplied in chat. It **preserves that page's existing demo seating features** and embeds the Twilio SMS manager in a **Messages** tab at `/admin`.
+**Exactly two user-facing routes:** `/` (guest RSVP lookup/edit) and `/admin` (live admin dashboard). Other routes under `/api/` are backend endpoints, not public pages. No Twilio, demo guests, event content pages, or mock seating system.
 
-## Important warning about the supplied admin
+## Deploy without breaking existing data
+1. Back up your current GitHub repo and export a Supabase backup. **Replace repository contents**, not merely merge: merging leaves unwanted routes behind. Do not delete the Supabase project or `rsvps` table.
+2. Upload all contents of this ZIP **at repository root** (so `app/page.js`, `app/admin/page.js`, and `package.json` are at root). Remove old app pages and old SMS routes. Keep the domain attached to the same Vercel project.
+3. In Vercel project Settings → Environment Variables, set `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (or existing `SUPABASE_SECRET_KEY`), `ADMIN_PASSWORD`, `RSVP_TOKEN_SECRET` (random 32+ characters), `TYPEFORM_WEBHOOK_SECRET` (if using Typeform webhook). Never add secret keys to GitHub or use NEXT_PUBLIC for them.
+4. In GitHub, commit the changed package.json and regenerate `package-lock.json` with `npm install` if a lockfile is present. Deploy on Vercel.
+5. Verify `/`, `/admin`, guest lookup, guest update, admin edit, admin delete, and Typeform test submission before relying on it. Test with a non-production RSVP first.
+6. To restore the RSVP page video, upload your original video file as `public/lucy-video.mp4`. The player hides if the file is absent. The ZIP includes only the logo image, not any font files. Add your own licensed font assets privately if needed.
 
-The supplied admin page is a **demo**: its guest data is hardcoded, table assignments and announcements are local state, and its password check was hardcoded in the browser. This patch removes the displayed hardcoded password and uses `ADMIN_PASSWORD` to authenticate the SMS API requests, but **the surrounding admin page is still not server-authenticated**. Do not treat its seating/announcement data as live. Protect `/admin` with real server-side auth before production use.
+## Typeform
+The existing Typeform webhook URL should be `https://rsvp.lucysquinceanera.com/api/typeform`. This code requires a webhook secret; configure the same secret in Typeform webhook settings and Vercel. It reuses the legacy field-mapping logic from the older portal; **test a real Typeform submission** because the mapping may need adjustment to your current form. The existing database table is preserved.
 
-The SMS panel **does** query your live Supabase `rsvps` table through protected API endpoints. It does not use the six sample guests on the dashboard.
+## Security and limitations
+Guest editing requires a 30-minute signed token returned by an exact-name and phone-suffix lookup or by a check-in code. Seven-digit phone lookup and check-in codes are less secure than verified one-time passcodes; use OTP for sensitive data. There is no persistent rate limiting on guest search or admin password attempts; add edge/WAF rate limiting before public launch. Admin password is verified on every backend request, not just in the browser. Admin dashboard loads up to 2000 RSVPs. No SMS features are installed.
 
-## Installation
+## Database
+Uses existing `public.rsvps` fields: `id`, `full_name`, `phone`, `phone_normalized`, `attending`, `guest_count`, `travel_from`, `additional_guests`, `confirmed_guests`, `comments`, `updated_at`, `table_number`, `checkin_code`, `checked_in`, `checked_in_at`, and Typeform metadata fields if present. No new SQL needed if these already exist. Do not run DROP TABLE.
 
-1. Back up your repository. Merge the ZIP folders at the repository root. **Replace only `app/admin/page.js` with this patch** if it still matches the code you pasted. Preserve other existing app files.
-2. `npm install twilio @supabase/supabase-js` and commit `package.json` and the lockfile.
-3. Run `sql/01-sms.sql` in Supabase SQL Editor.
-4. In Vercel set server-side `ADMIN_PASSWORD`, `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY`, `TWILIO_API_KEY_SECRET`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID`, `SMS_PUBLIC_BASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL` (or the alternate names described in `lib/lucy-sms.js`). `SMS_ESTIMATED_USD_PER_SEGMENT` is optional and must be a verified estimate; rates vary by destination.
-5. Redeploy, open `/admin`, enter `ADMIN_PASSWORD`, choose **Messages**, and click **Load recipients & history**.
-6. **Do not send until you have documented affirmative SMS consent**. Existing rows are not opted in by default. Add an unchecked consent field to Typeform and record it in the webhook, or collect consent independently. See SQL and prior README guidance.
-7. Test with one consented RSVP and a phone number you own. Verify the Twilio callback is reachable at `/api/sms/status`.
 
-## Behavior
+## Integrated admin tabs (this build)
+The only public pages are `/` and `/admin`. The admin has Guests & Check-In, Seating, and SMS Messages tabs. Seating is based on real Supabase RSVPs and each table assignment is persisted using `/api/admin-update-rsvp`; no demo guests. The seating tab has 12 initial drop zones plus any tables present in Supabase and a custom table field. Drag a confirmed party or use the dropdown (mobile friendly).
 
-- Confirmed RSVP records only, one message per eligible +1/+52 phone number.
-- Preview of exclusions, message, segment count, and optional approximate base cost.
-- 25 sends maximum per request, repeat for remaining eligible recipients.
-- Unique campaign/phone database reservation prevents repeat sends, including uncertain failures (which need manual review).
-- Signed Twilio delivery callbacks and message history.
-- No messages are sent simply by deploying or opening the tab.
+Twilio messaging uses `/api/sms/*`, `lib/lucy-sms.js`, and `sql/01-sms.sql`. Run the SQL once in Supabase, add the Twilio environment variables, and redeploy. Only confirmed RSVPs with documented SMS consent and supported international-format phone numbers can be sent reminders. Review estimated costs and recipients before sending. Each click sends at most 25 messages. SMS is manual, never automatic.
 
-## Known limitations
-
-- SMS opt-in is not automatically collected; you must wire it into Typeform.
-- This patch does not convert the supplied demo admin seating/announcements into Supabase-backed features.
-- Twilio international sender restrictions and pricing must be checked for Mexico numbers.
-- Browser password entry is used for SMS requests; a proper authenticated admin session is recommended before production.
-- A single configured SMS segment price is only an estimate, not a live quote.
-- No automatic retry of failed or uncertain submissions.
+Security: The admin is password-checked by the server APIs, but this project does not include a rate limiter or production-grade session auth. Add rate limiting before exposing the service broadly.

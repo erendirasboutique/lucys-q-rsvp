@@ -1,6 +1,5 @@
-
 {
-  "name": "lucys-quince-branded-site",
+  "name": "lucys-rsvp-portal",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -9,11 +8,10 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
+    "next": "16.4.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "@supabase/supabase-js": "^2.0.0",
     "twilio": "^5.0.0"
-  },
-  "devDependencies": {}
+  }
 }

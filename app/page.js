@@ -1,3 +1,4 @@
+
 "use client";
  
 import { useEffect, useRef, useState } from "react";
@@ -35,9 +36,9 @@ const text = {
     phone: "Número de teléfono",
     phoneHelp: "Puede usar solo los últimos 7 números.",
     namePlaceholder: "Ej. Maria Garcia",
-    phonePlaceholder: "Ej. 9091234567",
+    phonePlaceholder: "Ej. 1234567",
     searchBtn: "Buscar mi RSVP",
-    found: "Encontramos su RSVP!. Puede hacer cambios abajo.",
+    found: "Encontramos su RSVP. Puede hacer cambios abajo.",
     notFound: "No pudimos encontrar su RSVP.",
     greeting: "Bienvenid@",
     greetingText: "Estamos muy emocionados de celebrar contigo!",
@@ -56,8 +57,8 @@ const text = {
     confirmGroup: "Confirmar Su Grupo",
     comments: "Preguntas o comentarios",
     tableNumber: "Mesa",
-    checkinCode: "Código",
-    checkinHelp: "Este es tu código único.",
+    checkinCode: "Código de entrada",
+    checkinHelp: "Muestre este código al llegar a la fiesta.",
     checkedIn: "Ya registrado en la entrada",
     save: "Guardar cambios",
     saved: "¡Sus cambios fueron guardados! Gracias.",
@@ -65,7 +66,7 @@ const text = {
     footer: "Con cariño, Lucy's Quinceañera",
     home: "Home",
     site: "Lucy's Quinceañera",
-    soundOn: "Activar Sonido",
+    soundOn: "Activar sonido",
     soundOff: "Silenciar",
   },
   en: {
@@ -82,7 +83,7 @@ const text = {
     phone: "Phone Number",
     phoneHelp: "You can use only the last 7 numbers.",
     namePlaceholder: "Ex. Maria Garcia",
-    phonePlaceholder: "Ex. 9091234567",
+    phonePlaceholder: "Ex. 1234567",
     searchBtn: "Find My RSVP",
     found: "We found your RSVP. You can make changes below.",
     notFound: "We could not find your RSVP.",
@@ -103,8 +104,8 @@ const text = {
     confirmGroup: "Confirm Your Group",
     comments: "Questions or comments",
     tableNumber: "Table",
-    checkinCode: "Code",
-    checkinHelp: "This is your unique code",
+    checkinCode: "Check-in Code",
+    checkinHelp: "Show this code when you arrive at the party.",
     checkedIn: "Already checked in",
     save: "Save changes",
     saved: "Your changes were saved! Thank you.",
@@ -156,6 +157,7 @@ export default function HomePage() {
  
   const [lookup, setLookup] = useState({ full_name: "", phone: "" });
   const [rsvp, setRsvp] = useState(null);
+  const [editToken,setEditToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [confetti, setConfetti] = useState(false);
@@ -200,6 +202,7 @@ export default function HomePage() {
       if (!response.ok || !data.ok) throw new Error(data.error || t.notFound);
 
       setRsvp({ ...emptyForm, ...data.rsvp });
+      setEditToken(data.edit_token || "");
       setMessage(t.found);
     } catch (error) {
       setMessage(error.message);
@@ -224,6 +227,7 @@ export default function HomePage() {
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || t.notFound);
       setRsvp({ ...emptyForm, ...data.rsvp });
+      setEditToken(data.edit_token || "");
       setMessage(t.found);
     } catch (error) {
       setMessage(error.message);
@@ -242,11 +246,12 @@ export default function HomePage() {
       const response = await fetch("/api/update-rsvp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(rsvp),
+        body: JSON.stringify({...rsvp, edit_token: editToken}),
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Could not save changes.");
       setRsvp({ ...emptyForm, ...data.rsvp });
+      setEditToken(data.edit_token || "");
       setSuccess(true);
       fireConfetti();
       setMessage(t.saved);
@@ -321,6 +326,7 @@ export default function HomePage() {
                 loop
                 playsInline
                 controls
+                onError={(e) => { e.currentTarget.closest('.videoBox').style.display = 'none'; }}
               />
               <button className="soundToggle" type="button" onClick={toggleVideoSound}>
                 {videoMuted ? t.soundOn : t.soundOff}

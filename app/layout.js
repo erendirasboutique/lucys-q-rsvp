@@ -1,14 +1,3 @@
-import './globals.css';
-
-export const metadata = {
-  title: "Lucy's Quinceañera",
-  description: "A luxury quinceañera guest experience for Lucy's celebration.",
-};
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
-}
+import "./globals.css";
+export const metadata={title:"Lucy’s Quinceañera | RSVP",description:"Gestiona tu RSVP para la Quinceañera de Lucy"};
+export default function RootLayout({children}){return <html lang="es"><body>{children}</body></html>}
