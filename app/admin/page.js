@@ -438,31 +438,7 @@ export default function AdminPage() {
               </div>
               <button className="btn" type="submit" disabled={loading}>{loading ? <span className="loader" /> : t.enterDashboard}</button>
             </form>
-            </>}
-          {tab === "seating" && <div className="tablesSection">
-            <h2>{lang === "es" ? "Distribución de Mesas" : "Seating Arrangements"}</h2>
-            <p>{lang === "es" ? "Arrastre cada grupo confirmado a una mesa. Los cambios se guardan en Supabase." : "Drag confirmed parties onto a table. Changes save to Supabase."}</p>
-            <div className="seatTools no-print"><label>{lang === "es" ? "Agregar mesa" : "Add table"} <input value={tableDraft} onChange={e => setTableDraft(e.target.value.replace(/[^0-9A-Za-z -]/g, ""))} placeholder="1" /></label></div>
-            <div className="seatGrid">
-              {[...new Set([...Object.keys(tables).filter(x => x !== t.noTable), ...Array.from({length: 12},(_,i)=>String(i+1)), tableDraft.trim()].filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).concat(["Unassigned"]).map(table => {
-                const parties = rsvps.filter(r => isYes(r.attending) && (r.table_number || "Unassigned") === table);
-                return <div className="seatDrop" key={table} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData("text/plain");const guest=rsvps.find(r=>String(r.id)===id);if(guest)assignTable(guest,table)}}>
-                  <div className="seatCircle">{table === "Unassigned" ? "?" : table}</div>
-                  <h3>{table === "Unassigned" ? (lang === "es" ? "Sin Mesa" : "Unassigned") : `${lang === "es" ? "Mesa" : "Table"} ${table}`}</h3>
-                  <p>{parties.reduce((n,r)=>n+Number(r.guest_count||0),0)} {t.guests}</p>
-                  {parties.map(r=><div className="seatParty" key={r.id} draggable onDragStart={e=>e.dataTransfer.setData("text/plain",String(r.id))}>
-                    <strong>{r.full_name}</strong><small>{r.guest_count} {t.guests}</small>
-                    <select aria-label={`Assign ${r.full_name}`} value={r.table_number || "Unassigned"} onChange={e=>assignTable(r,e.target.value)}>
-                      {[...new Set([...Object.keys(tables).filter(x=>x!==t.noTable),...Array.from({length:12},(_,i)=>String(i+1)),tableDraft.trim(),"Unassigned"].filter(Boolean))].map(x=><option key={x} value={x}>{x}</option>)}
-                    </select>
-                  </div>)}
-                </div>;
-              })}
-            </div>
-            <button className="btn secondary no-print" onClick={()=>window.print()}>{t.print}</button>
-          </div>}
-          {tab === "messages" && <SmsPanel adminPassword={password} />}
-          {message && <div className="message">{message}</div>}
+            {message && <div className="message">{message}</div>}
           </div>
         </section>
       </main>
@@ -578,6 +554,30 @@ export default function AdminPage() {
             </table>
           </div>
  
+          </>}
+          {tab === "seating" && <div className="tablesSection">
+            <h2>{lang === "es" ? "Distribución de Mesas" : "Seating Arrangements"}</h2>
+            <p>{lang === "es" ? "Arrastre cada grupo confirmado a una mesa. Los cambios se guardan en Supabase." : "Drag confirmed parties onto a table. Changes save to Supabase."}</p>
+            <div className="seatTools no-print"><label>{lang === "es" ? "Agregar mesa" : "Add table"} <input value={tableDraft} onChange={e => setTableDraft(e.target.value.replace(/[^0-9A-Za-z -]/g, ""))} placeholder="1" /></label></div>
+            <div className="seatGrid">
+              {[...new Set([...Object.keys(tables).filter(x => x !== t.noTable), ...Array.from({length: 12},(_,i)=>String(i+1)), tableDraft.trim()].filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).concat(["Unassigned"]).map(table => {
+                const parties = rsvps.filter(r => isYes(r.attending) && (r.table_number || "Unassigned") === table);
+                return <div className="seatDrop" key={table} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData("text/plain");const guest=rsvps.find(r=>String(r.id)===id);if(guest)assignTable(guest,table)}}>
+                  <div className="seatCircle">{table === "Unassigned" ? "?" : table}</div>
+                  <h3>{table === "Unassigned" ? (lang === "es" ? "Sin Mesa" : "Unassigned") : `${lang === "es" ? "Mesa" : "Table"} ${table}`}</h3>
+                  <p>{parties.reduce((n,r)=>n+Number(r.guest_count||0),0)} {t.guests}</p>
+                  {parties.map(r=><div className="seatParty" key={r.id} draggable onDragStart={e=>e.dataTransfer.setData("text/plain",String(r.id))}>
+                    <strong>{r.full_name}</strong><small>{r.guest_count} {t.guests}</small>
+                    <select aria-label={`Assign ${r.full_name}`} value={r.table_number || "Unassigned"} onChange={e=>assignTable(r,e.target.value)}>
+                      {[...new Set([...Object.keys(tables).filter(x=>x!==t.noTable),...Array.from({length:12},(_,i)=>String(i+1)),tableDraft.trim(),"Unassigned"].filter(Boolean))].map(x=><option key={x} value={x}>{x}</option>)}
+                    </select>
+                  </div>)}
+                </div>;
+              })}
+            </div>
+            <button className="btn secondary no-print" onClick={()=>window.print()}>{t.print}</button>
+          </div>}
+          {tab === "messages" && <SmsPanel adminPassword={password} />}
           {message && <div className="message">{message}</div>}
         </div>
  
