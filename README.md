@@ -26,3 +26,39 @@ The only public pages are `/` and `/admin`. The admin has Guests & Check-In, Sea
 Twilio messaging uses `/api/sms/*`, `lib/lucy-sms.js`, and `sql/01-sms.sql`. Run the SQL once in Supabase, add the Twilio environment variables, and redeploy. Only confirmed RSVPs with documented SMS consent and supported international-format phone numbers can be sent reminders. Review estimated costs and recipients before sending. Each click sends at most 25 messages. SMS is manual, never automatic.
 
 Security: The admin is password-checked by the server APIs, but this project does not include a rate limiter or production-grade session auth. Add rate limiting before exposing the service broadly.
+
+---
+
+## Personal guest pages (new)
+
+Every guest now gets a private page at **rsvp.lucysquinceanera.com** with their table, check-in pass, role, weekend events, travel plan, shuttles, ride matches, messages to the family, song requests, wishes for Lucy, meals, and an RSVP editor — in Spanish and English. On the day of the party it switches to “Tonight” mode, and afterward to a thank-you page with the photo album.
+
+### How guests get in
+- **Personal link:** `rsvp.lucysquinceanera.com/g/<private code>`. Each RSVP has its own long random code. Opening it remembers that phone for 30 days.
+- **Name + phone** (same as before) or the existing `?code=` check-in link also works, and also remembers the phone.
+- Admin → Edit guest → **Reset link** makes a new link; the old link and any phone signed in with it stop working immediately.
+
+### Setup (once)
+1. In Supabase → SQL Editor, run **`sql/02-guest-portal.sql`**. It only adds columns/tables and a private storage bucket (`guest-uploads`); it never deletes data. Every existing RSVP gets a private link code.
+2. Vercel environment variables:
+   - `RSVP_TOKEN_SECRET` — already required (32+ random characters). Changing it signs everyone out and changes the table QR / DJ links.
+   - `PUBLIC_SITE_URL=https://rsvp.lucysquinceanera.com` — recommended; used to build links in texts and QR cards.
+   - `FAMILY_NOTIFY_PHONE=+1XXXXXXXXXX` — optional; texts you when a guest sends a message.
+   - Twilio variables (already used by the SMS tab) — needed only for texting links, announcements and reply alerts.
+3. Upload this ZIP at the repository root (replace contents) and deploy. No new npm packages.
+4. In **/admin**:
+   - **Programa / Program** → fill in Event details (venue, maps link, dress code, court color, deadlines, meal options, gifts link, thank-you note), the night-of schedule, and page-mode dates. Add events (rehearsal, welcome dinner, misa…) and choose who's invited. Assign court/padrino roles.
+   - **Invitados → Editar** → new “Guest page” section: table note, personal note, role, groups (e.g. `court`), shuttle, personal link (copy / preview / reset).
+   - **Llegadas / Arrivals** → see who lands when, create shuttles, post announcements (everyone, a group, a hotel or a table) and optionally text them.
+   - **Mensajes de invitados / Guest messages** → read and reply to guests.
+   - **Program → Text links to confirmed guests** sends each opted-in guest their link, 25 per click, never twice for the same link. Or use **Copy link** per guest.
+   - **Program → Print table QR cards** — one card per table; guests scan it to upload photos/videos without signing in.
+   - **Program → Copy DJ link** — read-only song list for the DJ (no guest info).
+5. Test with your own RSVP first: open your link, try each tab, then use Program → Page mode → Override to preview “Tonight” and the thank-you page. Set the override back to Automatic when done.
+
+### Notes
+- New public routes: `/g/[code]`, `/photos/[table code]`, `/dj/[code]`. New APIs under `/api/guest/*`, `/api/photos`, `/api/dj`, `/api/admin/portal`. The old routes still work.
+- Photos and wish videos upload straight from the phone to the private Supabase bucket (up to 200 MB each), so large videos don't go through Vercel.
+- “Save my pass” shows a full-screen pass with a QR code to screenshot or print. A real Apple/Google Wallet pass needs an Apple Developer / Google Wallet issuer account and certificates, so it isn't included.
+- Rate limiting on sign-in, messages and uploads is per server instance (best effort). Add Vercel firewall rules if you need more.
+- New tables are locked with row-level security; only the server (service role key) reads or writes them.

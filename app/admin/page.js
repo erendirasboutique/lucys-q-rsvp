@@ -2,6 +2,7 @@
  
 import { useState } from "react";
 import SmsPanel from "./SmsPanel";
+import { LinkCell, GuestPageEditor, ArrivalsPanel, ProgramPanel, InboxPanel, portalCall } from "./PortalAdmin";
  
 const blankEdit = {
   id: "",
@@ -225,6 +226,28 @@ export default function AdminPage() {
   const [editing, setEditing] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [portal, setPortal] = useState(null);
+  const [portalError, setPortalError] = useState("");
+
+  async function loadPortal(pw = password) {
+    try {
+      const data = await portalCall(pw, "load");
+      setPortal(data);
+      setPortalError("");
+    } catch (error) {
+      setPortalError(error.message);
+    }
+  }
+
+  async function reloadPortalAndList() {
+    await Promise.all([loadPortal(), refreshList()]);
+  }
+
+  function updateRsvp(row) {
+    if (!row?.id) return;
+    setRsvps((rows) => rows.map((r) => (r.id === row.id ? row : r)));
+    setEditing((e) => (e && e.id === row.id ? { ...e, ...row } : e));
+  }
  
   async function assignTable(rsvp, tableNumber) {
     if (!rsvp || !isYes(rsvp.attending)) return;
@@ -255,6 +278,7 @@ export default function AdminPage() {
       if (!res.ok || !data.ok) throw new Error(data.error || t.couldNotOpen);
       setRsvps(data.rsvps || []);
       setUnlocked(true);
+      loadPortal(password);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -403,6 +427,8 @@ export default function AdminPage() {
     return groups;
   }, {});
  
+  const unreadInbox = new Set((portal?.messages || []).filter((m) => m.sender === "guest" && !m.read_by_family_at).map((m) => m.rsvp_id)).size;
+
   const LanguageSelector = () => (
     <div className="language-switch no-print">
       <label>{t.language}</label>
@@ -465,12 +491,15 @@ export default function AdminPage() {
               <h1>{t.overview}</h1>
               <p>{t.overviewIntro}</p>
             </div>
-            <button className="btn secondary no-print" onClick={refreshList}>{t.refresh}</button>
+            <button className="btn secondary no-print" onClick={reloadPortalAndList}>{t.refresh}</button>
           </div>
  
           <nav className="adminTabs no-print" aria-label="Admin sections">
             <button type="button" className={tab === "guests" ? "adminTab active" : "adminTab"} onClick={() => setTab("guests")}>{lang === "es" ? "Invitados y Check-In" : "Guests & Check-In"}</button>
             <button type="button" className={tab === "seating" ? "adminTab active" : "adminTab"} onClick={() => setTab("seating")}>{lang === "es" ? "Mesas" : "Seating"}</button>
+            <button type="button" className={tab === "arrivals" ? "adminTab active" : "adminTab"} onClick={() => setTab("arrivals")}>{lang === "es" ? "Llegadas" : "Arrivals"}</button>
+            <button type="button" className={tab === "program" ? "adminTab active" : "adminTab"} onClick={() => setTab("program")}>{lang === "es" ? "Programa" : "Program"}</button>
+            <button type="button" className={tab === "inbox" ? "adminTab active" : "adminTab"} onClick={() => setTab("inbox")}>{lang === "es" ? "Mensajes de invitados" : "Guest messages"}{unreadInbox > 0 ? ` (${unreadInbox})` : ""}</button>
             <button type="button" className={tab === "messages" ? "adminTab active" : "adminTab"} onClick={() => setTab("messages")}>{lang === "es" ? "Mensajes SMS" : "SMS Messages"}</button>
           </nav>
           {tab === "guests" && <>
@@ -528,6 +557,7 @@ export default function AdminPage() {
                   <th>{t.phone}</th>
                   <th>{t.guestNames}</th>
                   <th>{t.comments}</th>
+                  <th className="no-print">{lang === "es" ? "Página del invitado" : "Guest page"}</th>
                   <th className="no-print">{t.actions}</th>
                 </tr>
               </thead>
@@ -543,6 +573,7 @@ export default function AdminPage() {
                     <td>{r.phone}</td>
                     <td>{r.additional_guests || r.confirmed_guests}</td>
                     <td>{r.comments}</td>
+                    <td className="no-print"><LinkCell r={r} portal={portal} password={password} onNotice={setMessage} /></td>
                     <td className="no-print">
                       <button className="mini-btn" onClick={() => openEdit(r)}>{t.edit}</button>
                       <button className="mini-btn" onClick={() => checkInGuest(r)} disabled={r.checked_in}>{t.arrived}</button>
@@ -577,6 +608,12 @@ export default function AdminPage() {
             </div>
             <button className="btn secondary no-print" onClick={()=>window.print()}>{t.print}</button>
           </div>}
+          {["arrivals", "program", "inbox"].includes(tab) && !portal && (
+            <div className="message">{portalError ? `${portalError} — run sql/02-guest-portal.sql in Supabase, then Refresh.` : "Loading…"}</div>
+          )}
+          {tab === "arrivals" && portal && <ArrivalsPanel rsvps={rsvps} portal={portal} password={password} reloadPortal={reloadPortalAndList} updateRsvp={updateRsvp} onNotice={setMessage} />}
+          {tab === "program" && portal && <ProgramPanel rsvps={rsvps} portal={portal} password={password} reloadPortal={reloadPortalAndList} updateRsvp={updateRsvp} onNotice={setMessage} />}
+          {tab === "inbox" && portal && <InboxPanel rsvps={rsvps} portal={portal} password={password} reloadPortal={loadPortal} onNotice={setMessage} />}
           {tab === "messages" && <SmsPanel adminPassword={password} />}
           {message && <div className="message">{message}</div>}
         </div>
@@ -619,6 +656,7 @@ export default function AdminPage() {
               <button className="btn" type="submit" disabled={loading}>{loading ? <span className="loader" /> : t.save}</button>
               <button className="btn secondary" type="button" onClick={() => setEditing(null)}>{t.cancel}</button>
             </div>
+            {editing.id && <GuestPageEditor key={editing.id + (editing.access_token || "")} rsvp={editing} portal={portal} password={password} onSaved={updateRsvp} onNotice={setMessage} />}
           </form>
         </div>
       )}

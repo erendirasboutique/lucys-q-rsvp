@@ -1,311 +1,155 @@
-
 "use client";
- 
-import { useEffect, useRef, useState } from "react";
- 
-const EVENT_DATE = "2027-01-04T17:00:00"; // Change the time if needed.
- 
-const emptyForm = {
-  id: "",
-  full_name: "",
-  phone: "",
-  travel_from: "",
-  attending: "",
-  guest_count: 1,
-  additional_guests: "",
-  confirmed_guests: "",
-  comments: "",
-  table_number: "",
-  checkin_code: "",
-  checked_in: false,
-  checked_in_at: "",
-};
- 
-const text = {
-  es: {
-    badge: "Portal de RSVP",
-    language: "Idioma",
-    countdownTitle: "Faltan para la Quinceañera",
-    days: "Días",
-    hours: "Horas",
-    minutes: "Min",
-    seconds: "Seg",
-    searchTitle: "Buscar RSVP",
-    searchIntro: "Ingrese su nombre completo y número de teléfono para ver o cambiar su respuesta.",
-    fullName: "Nombre completo",
-    phone: "Número de teléfono",
-    phoneHelp: "Puede usar solo los últimos 7 números.",
-    namePlaceholder: "Ej. Maria Garcia",
-    phonePlaceholder: "Ej. 1234567",
-    searchBtn: "Buscar mi RSVP",
-    found: "Encontramos su RSVP. Puede hacer cambios abajo.",
-    notFound: "No pudimos encontrar su RSVP.",
-    greeting: "Bienvenid@",
-    greetingText: "Estamos muy emocionados de celebrar contigo!",
-    editIntro: "Actualice su RSVP para la Quinceañera de Lucy.",
-    statusConfirmed: "Confirmado",
-    statusDeclined: "No asistirá",
-    statusPending: "Pendiente",
-    attending: "¿Vas a asistir?",
-    selectOption: "Seleccione una opción",
-    yes: "Sí",
-    no: "No",
-    maybe: "Tal vez",
-    groupCount: "Personas en su grupo",
-    travelFrom: "¿Desde dónde viaja?",
-    additionalGuests: "Invitados Adicionales",
-    confirmGroup: "Confirmar Su Grupo",
-    comments: "Preguntas o comentarios",
-    tableNumber: "Mesa",
-    checkinCode: "Código de entrada",
-    checkinHelp: "Muestre este código al llegar a la fiesta.",
-    checkedIn: "Ya registrado en la entrada",
-    save: "Guardar cambios",
-    saved: "¡Sus cambios fueron guardados! Gracias.",
-    another: "Buscar otra RSVP",
-    footer: "Con cariño, Lucy's Quinceañera",
-    home: "Home",
-    site: "Lucy's Quinceañera",
-    soundOn: "Activar sonido",
-    soundOff: "Silenciar",
-  },
-  en: {
-    badge: "RSVP Portal",
-    language: "Language",
-    countdownTitle: "Countdown to the Quinceañera",
-    days: "Days",
-    hours: "Hours",
-    minutes: "Min",
-    seconds: "Sec",
-    searchTitle: "Find RSVP",
-    searchIntro: "Enter your full name and phone number to view or update your RSVP.",
-    fullName: "Full Name",
-    phone: "Phone Number",
-    phoneHelp: "You can use only the last 7 numbers.",
-    namePlaceholder: "Ex. Maria Garcia",
-    phonePlaceholder: "Ex. 1234567",
-    searchBtn: "Find My RSVP",
-    found: "We found your RSVP. You can make changes below.",
-    notFound: "We could not find your RSVP.",
-    greeting: "Welcome",
-    greetingText: "We are so excited to celebrate with you.",
-    editIntro: "Update your RSVP for Lucy's quinceañera.",
-    statusConfirmed: "Confirmed",
-    statusDeclined: "Not Attending",
-    statusPending: "Pending",
-    attending: "Are you attending?",
-    selectOption: "Select an option",
-    yes: "Yes",
-    no: "No",
-    maybe: "Maybe",
-    groupCount: "People in your group",
-    travelFrom: "Where are you traveling from?",
-    additionalGuests: "Additional Guests",
-    confirmGroup: "Confirm Your Group",
-    comments: "Questions or comments",
-    tableNumber: "Table",
-    checkinCode: "Check-in Code",
-    checkinHelp: "Show this code when you arrive at the party.",
-    checkedIn: "Already checked in",
-    save: "Save changes",
-    saved: "Your changes were saved! Thank you.",
-    another: "Find another RSVP",
-    footer: "With love, Lucy's Quinceañera",
-    home: "Home",
-    site: "Lucy's Quinceañera",
-    soundOn: "Turn sound on",
-    soundOff: "Mute",
-  },
-};
- 
-function firstName(fullName) {
-  return (fullName || "").trim().split(" ")[0] || "";
-}
- 
-function guestDisplay(rsvp) {
-  const name = firstName(rsvp.full_name);
-  const extraGuests = rsvp.additional_guests || "";
-  if (!extraGuests) return name;
-  return `${name}\n${extraGuests}`;
-}
- 
-function statusInfo(attending, t) {
-  const value = String(attending || "").toLowerCase();
-  if (value.includes("no")) return { label: t.statusDeclined, className: "status-badge status-no" };
-  if (value.includes("si") || value.includes("sí") || value.includes("yes")) {
-    return { label: t.statusConfirmed, className: "status-badge status-yes" };
-  }
-  return { label: t.statusPending, className: "status-badge status-pending" };
-}
- 
+// rsvp.lucysquinceanera.com — guest sign-in, then each guest's personal page.
+import { useCallback, useEffect, useRef, useState } from "react";
+import Portal from "./guest/Portal";
+import { T } from "./guest/i18n";
+import { Icon, api } from "./guest/ui";
+
+const EVENT_DATE = "2027-01-04T17:00:00-06:00";
+
 function getCountdown() {
-  const now = new Date().getTime();
-  const event = new Date(EVENT_DATE).getTime();
-  const distance = Math.max(event - now, 0);
- 
+  const distance = Math.max(new Date(EVENT_DATE).getTime() - Date.now(), 0);
   return {
-    days: Math.floor(distance / (1000 * 60 * 60 * 24)),
-    hours: Math.floor((distance / (1000 * 60 * 60)) % 24),
-    minutes: Math.floor((distance / (1000 * 60)) % 60),
+    days: Math.floor(distance / 864e5),
+    hours: Math.floor((distance / 36e5) % 24),
+    minutes: Math.floor((distance / 6e4) % 60),
     seconds: Math.floor((distance / 1000) % 60),
   };
 }
- 
+
+function initialLang() {
+  try {
+    const saved = localStorage.getItem("lq_lang");
+    if (saved === "es" || saved === "en") return saved;
+  } catch {}
+  return "es";
+}
+
 export default function HomePage() {
-  const [lang, setLang] = useState("es");
-  const t = text[lang];
- 
-  const [lookup, setLookup] = useState({ full_name: "", phone: "" });
-  const [rsvp, setRsvp] = useState(null);
-  const [editToken,setEditToken] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [confetti, setConfetti] = useState(false);
-  const [message, setMessage] = useState("");
-  const [videoMuted, setVideoMuted] = useState(true);
-  const [countdown, setCountdown] = useState(getCountdown());
-  const videoRef = useRef(null);
- 
-  useEffect(() => {
-    const timer = setInterval(() => setCountdown(getCountdown()), 1000);
-    return () => clearInterval(timer);
+  const [lang, setLangState] = useState("es");
+  const [state, setState] = useState("loading"); // loading | signin | portal
+  const [data, setData] = useState(null);
+  const t = T[lang];
+
+  const setLang = useCallback((l) => {
+    setLangState(l);
+    try {
+      localStorage.setItem("lq_lang", l);
+    } catch {}
+  }, []);
+
+  const load = useCallback(async () => {
+    try {
+      const d = await api("/api/guest/me");
+      setData(d);
+      setState("portal");
+      return d;
+    } catch (e) {
+      if (e.status === 401) setState("signin");
+      else setState((s) => (s === "portal" ? s : "signin"));
+      return null;
+    }
   }, []);
 
   useEffect(() => {
+    setLangState(initialLang());
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    if (code) {
-      searchByCode(code);
+    (async () => {
+      if (code) {
+        try {
+          await api("/api/guest/login", { code });
+        } catch {}
+        window.history.replaceState({}, "", "/");
+      }
+      const d = await load();
+      if (d?.guest?.preferred_language && !localStorage.getItem("lq_lang")) setLangState(d.guest.preferred_language);
+    })();
+  }, [load]);
+
+  async function signOut() {
+    try {
+      await api("/api/guest/logout", {});
+    } catch {}
+    setData(null);
+    setState("signin");
+  }
+
+  if (state === "loading") {
+    return (
+      <main className="gp gp-center">
+        <img src="/logo.png" alt="Lucy's Quinceañera" className="gp-logo" />
+        <span className="loader" aria-label={t.loading} />
+      </main>
+    );
+  }
+
+  if (state === "portal" && data) {
+    return <Portal data={data} lang={lang} setLang={setLang} reload={load} onSignOut={signOut} />;
+  }
+
+  return <SignIn lang={lang} setLang={setLang} onSignedIn={load} />;
+}
+
+function SignIn({ lang, setLang, onSignedIn }) {
+  const t = T[lang];
+  const [form, setForm] = useState({ full_name: "", phone: "", remember: true });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [countdown, setCountdown] = useState(getCountdown());
+  const [muted, setMuted] = useState(true);
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setCountdown(getCountdown()), 1000);
+    const link = new URLSearchParams(window.location.search).get("link");
+    if (link) {
+      setMessage(link === "invalid" ? T[lang].linkInvalid : T[lang].error);
+      window.history.replaceState({}, "", "/");
     }
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
- 
-  function fireConfetti() {
-    setConfetti(true);
-    setTimeout(() => setConfetti(false), 2600);
-  }
- 
-  async function searchByCode(code) {
-    setLoading(true);
-    setSuccess(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
     setMessage("");
-    setRsvp(null);
-
     try {
-      const response = await fetch("/api/search-rsvp-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || t.notFound);
-
-      setRsvp({ ...emptyForm, ...data.rsvp });
-      setEditToken(data.edit_token || "");
-      setMessage(t.found);
-    } catch (error) {
-      setMessage(error.message);
+      await api("/api/guest/login", form);
+      await onSignedIn();
+    } catch (err) {
+      setMessage(err.message === "not_found" ? t.notFound : err.message && err.message !== "error" ? err.message : t.error);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
-  async function searchRSVP(event) {
-    event.preventDefault();
-    setLoading(true);
-    setSuccess(false);
-    setMessage("");
-    setRsvp(null);
- 
+  async function toggleSound() {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !muted;
+    setMuted(!muted);
     try {
-      const response = await fetch("/api/search-rsvp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(lookup),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || t.notFound);
-      setRsvp({ ...emptyForm, ...data.rsvp });
-      setEditToken(data.edit_token || "");
-      setMessage(t.found);
-    } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setLoading(false);
-    }
+      await v.play();
+    } catch {}
   }
- 
-  async function saveRSVP(event) {
-    event.preventDefault();
-    setLoading(true);
-    setSuccess(false);
-    setMessage("");
- 
-    try {
-      const response = await fetch("/api/update-rsvp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({...rsvp, edit_token: editToken}),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "Could not save changes.");
-      setRsvp({ ...emptyForm, ...data.rsvp });
-      setEditToken(data.edit_token || "");
-      setSuccess(true);
-      fireConfetti();
-      setMessage(t.saved);
-    } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
- 
-  async function toggleVideoSound() {
-    const video = videoRef.current;
-    if (!video) return;
-    const nextMuted = !videoMuted;
-    video.muted = nextMuted;
-    setVideoMuted(nextMuted);
-    try {
-      await video.play();
-    } catch (error) {
-      // Some browsers require a tap before audio/video can play.
-    }
-  }
- 
-  const guestNames = rsvp ? guestDisplay(rsvp) : "";
-  const status = rsvp ? statusInfo(rsvp.attending, t) : null;
- 
+
   return (
     <main className="page luxury-page">
       <div className="sparkles" aria-hidden="true" />
       <div className="flower-petals" aria-hidden="true">
         <span /><span /><span /><span /><span /><span /><span /><span /><span /><span />
       </div>
- 
-      {confetti && (
-        <div className="confetti" aria-hidden="true">
-          {Array.from({ length: 28 }).map((_, index) => <span key={index} />)}
-        </div>
-      )}
- 
-      <section className="shell fade-in">
+      <section className="shell fade-in gp-signin">
         <div className="hero">
           <img src="/logo.png" alt="Lucy's Quinceañera" className="logo" />
- 
           <div className="heroBadges">
             <div className="badge">{t.badge}</div>
-            <div className="language-switch">
-              <label>{t.language}</label>
-              <select value={lang} onChange={(e) => setLang(e.target.value)}>
-                <option value="es">Español</option>
-                <option value="en">English</option>
-              </select>
+            <div className="gp-seg small" role="group" aria-label={t.language}>
+              {["es", "en"].map((l) => <button key={l} type="button" aria-pressed={lang === l} onClick={() => setLang(l)}>{l === "es" ? "Español" : "English"}</button>)}
             </div>
           </div>
- 
           <div className="countdownCard">
             <p>{t.countdownTitle}</p>
             <div className="countdownGrid">
@@ -315,167 +159,36 @@ export default function HomePage() {
               <div><strong>{countdown.seconds}</strong><span>{t.seconds}</span></div>
             </div>
           </div>
- 
-          {!rsvp && (
-            <div className="videoBox">
-              <video
-                ref={videoRef}
-                src="/lucy-video.mp4"
-                autoPlay
-                muted={videoMuted}
-                loop
-                playsInline
-                controls
-                onError={(e) => { e.currentTarget.closest('.videoBox').style.display = 'none'; }}
-              />
-              <button className="soundToggle" type="button" onClick={toggleVideoSound}>
-                {videoMuted ? t.soundOn : t.soundOff}
-              </button>
-            </div>
-          )}
+          <div className="videoBox">
+            <video ref={videoRef} src="/lucy-video.mp4" autoPlay muted={muted} loop playsInline controls onError={(e) => { e.currentTarget.closest(".videoBox").style.display = "none"; }} />
+            <button className="soundToggle" type="button" onClick={toggleSound}>{muted ? t.soundOn : t.soundOff}</button>
+          </div>
         </div>
- 
-        <div className="card glass-card">
-          {!rsvp ? (
-            <>
-              <h1>{t.searchTitle}</h1>
-              <p>{t.searchIntro}</p>
- 
-              <form className="form" onSubmit={searchRSVP}>
-                <div className="grid2">
-                  <div className="field">
-                    <label>{t.fullName}</label>
-                    <input
-                      value={lookup.full_name}
-                      onChange={(e) => setLookup({ ...lookup, full_name: e.target.value })}
-                      placeholder={t.namePlaceholder}
-                      required
-                    />
-                  </div>
- 
-                  <div className="field">
-                    <label>{t.phone}</label>
-                    <input
-                      value={lookup.phone}
-                      onChange={(e) => setLookup({ ...lookup, phone: e.target.value })}
-                      placeholder={t.phonePlaceholder}
-                      required
-                    />
-                    <small>{t.phoneHelp}</small>
-                  </div>
-                </div>
- 
-                <button className="btn" disabled={loading} type="submit">
-                  {loading ? <span className="loader" /> : t.searchBtn}
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <div className="personalGreeting">
-                <div>
-                  <h2>✨ {t.greeting}, {firstName(rsvp.full_name)}!</h2>
-                  <p>{t.greetingText}</p>
-                </div>
-                {status && <div className={status.className}>{status.label}</div>}
-              </div>
- 
-              {success && (
-                <div className="success-screen">
-                  <div className="success-check">✓</div>
-                  <strong>{t.saved}</strong>
-                </div>
-              )}
- 
-              <div className="guestMeta">
-                <div>
-                  <span>{t.tableNumber}</span>
-                  <strong>{rsvp.table_number || "TBD"}</strong>
-                </div>
-                <div>
-                  <span>{t.checkinCode}</span>
-                  <strong>{rsvp.checkin_code || "Pending"}</strong>
-                  <small>{rsvp.checked_in ? t.checkedIn : t.checkinHelp}</small>
-                </div>
-              </div>
- 
-              <form className="form" onSubmit={saveRSVP}>
-                <div className="grid2">
-                  <div className="field">
-                    <label>{t.attending}</label>
-                    <select
-                      value={rsvp.attending || ""}
-                      onChange={(e) => setRsvp({ ...rsvp, attending: e.target.value })}
-                    >
-                      <option value="">{t.selectOption}</option>
-                      <option value="Si/Yes">Si/Yes</option>
-                      <option value="Sí">{t.yes}</option>
-                      <option value="No">{t.no}</option>
-                      <option value="Tal vez">{t.maybe}</option>
-                    </select>
-                  </div>
- 
-                  <div className="field">
-                    <label>{t.groupCount}</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={rsvp.guest_count || 1}
-                      onChange={(e) => setRsvp({ ...rsvp, guest_count: Number(e.target.value) })}
-                    />
-                  </div>
 
-                </div>
- 
-                <div className="field">
-                  <label>{t.travelFrom}</label>
-                  <input
-                    value={rsvp.travel_from || ""}
-                    onChange={(e) => setRsvp({ ...rsvp, travel_from: e.target.value })}
-                  />
-                </div>
- 
-                <div className="field">
-                  <label>{t.additionalGuests}</label>
-                  <textarea value={guestNames} readOnly />
-                </div>
- 
-                <div className="field">
-                  <label>{t.confirmGroup}</label>
-                  <textarea value={guestNames} readOnly />
-                </div>
- 
-                <div className="field">
-                  <label>{t.comments}</label>
-                  <textarea
-                    value={rsvp.comments || ""}
-                    onChange={(e) => setRsvp({ ...rsvp, comments: e.target.value })}
-                  />
-                </div>
- 
-                <div className="actions">
-                  <button className="btn" disabled={loading} type="submit">
-                    {loading ? <span className="loader" /> : t.save}
-                  </button>
-                  <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={() => {
-                      setRsvp(null);
-                      setMessage("");
-                      setSuccess(false);
-                    }}
-                  >
-                    {t.another}
-                  </button>
-                </div>
-              </form>
-            </>
-          )}
- 
-          {message && <div className={success ? "message success-message" : "message"}>{message}</div>}
+        <div className="gp-card hl gp-signin-card">
+          <div className="gp-col" style={{ gap: 6 }}>
+            <h1 className="gp-h1" style={{ fontSize: 30 }}>{t.signInTitle}</h1>
+            <p className="gp-muted">{t.signInIntro}</p>
+          </div>
+          <div className="gp-note"><Icon name="link" color="#b8005f" /><p>{t.linkTip}</p></div>
+          <div className="gp-or"><span />{t.orSignIn}<span /></div>
+          <form className="gp-col" style={{ gap: 14 }} onSubmit={submit}>
+            <div className="gp-field">
+              <label htmlFor="si-name">{t.fullName}</label>
+              <input id="si-name" className="gp-input" autoComplete="name" value={form.full_name} placeholder={t.namePlaceholder} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
+            </div>
+            <div className="gp-field">
+              <label htmlFor="si-phone">{t.phone}</label>
+              <input id="si-phone" className="gp-input" inputMode="tel" autoComplete="tel" value={form.phone} placeholder={t.phonePlaceholder} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
+              <small>{t.phoneHelp}</small>
+            </div>
+            <label className="gp-check"><input type="checkbox" checked={form.remember} onChange={(e) => setForm({ ...form, remember: e.target.checked })} />{t.remember}</label>
+            <button className="gp-btn big" type="submit" disabled={busy}>{busy ? <span className="loader" /> : t.openPage}</button>
+          </form>
+          {message && <div className="message" role="alert">{message}</div>}
+          <p className="gp-small gp-muted gp-row" style={{ gap: 8, justifyContent: "center" }}><Icon name="lock" size={16} />{t.privateNote}</p>
         </div>
- 
+
         <footer className="footer">
           <div className="footerDivider" />
           <p>{t.footer}</p>
