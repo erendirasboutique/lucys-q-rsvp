@@ -6,13 +6,18 @@ import {
   newAccessToken, fingerprint, tableCode, djCode, personalLink, siteUrl, isConfirmed, firstName,
 } from "../../../../lib/portal-server";
 import { sendBatch, linkMessage, smsConfigured, smsReason } from "../../../../lib/portal-sms";
-import { DEFAULT_LINK_TEXT } from "../../../../lib/link-text";
+import { DEFAULT_LINK_TEXT, DEFAULT_WELCOME_TEXT, renderMessage } from "../../../../lib/link-text";
 
-function cleanTemplate(t) {
+function contactPhone() {
+  const p = String(process.env.SMS_CONTACT_PHONE || "").replace(/[^\d+]/g, "");
+  return /^\+\d{10,15}$/.test(p) ? p : null;
+}
+
+function cleanTemplate(t, { requireLink = true } = {}) {
   const es = String(t?.es || "").replace(/\r/g, "").trim().slice(0, 1200);
   const en = String(t?.en || "").replace(/\r/g, "").trim().slice(0, 1200);
   if (!es) throw Object.assign(new Error("Write the Spanish message"), { status: 400 });
-  if (!/\{\s*link\s*\}/i.test(es) || (en && !/\{\s*link\s*\}/i.test(en))) throw Object.assign(new Error("Put {link} in the message where their personal link should go"), { status: 400 });
+  if (requireLink && (!/\{\s*link\s*\}/i.test(es) || (en && !/\{\s*link\s*\}/i.test(en)))) throw Object.assign(new Error("Put {link} in the message where their personal link should go"), { status: 400 });
   return { es, en };
 }
 
@@ -55,6 +60,14 @@ async function load(req) {
   ]);
   for (const r of [events, eventRsvps, shuttles, ann, msgs, songs, votes, wishes, photos, tables]) if (r.error) throw r.error;
 
+  // How many guests already got the welcome text and their personal link (tests not counted).
+  const sentTo = async (prefix) => {
+    const { data, error } = await database.from("sms_outbox").select("campaign_key,rsvp_id,status").like("campaign_key", `${prefix}-%`).limit(10000);
+    if (error) return [];
+    return [...new Set((data || []).filter((r) => !r.campaign_key.startsWith(`${prefix}-test-`) && r.status !== "needs_review").map((r) => r.rsvp_id))];
+  };
+  const [welcomed, linked] = await Promise.all([sentTo("welcome"), sentTo("link")]);
+
   const voteCount = {};
   (votes.data || []).forEach((v) => {
     voteCount[v.song_id] = (voteCount[v.song_id] || 0) + 1;
@@ -89,6 +102,8 @@ async function load(req) {
     djUrl: `${base}/dj/${djCode()}`,
     siteUrl: base,
     smsReady: smsConfigured(),
+    contactCard: { ready: Boolean(contactPhone()), phone: contactPhone(), url: `${base}/contact.vcf` },
+    textStats: { welcomed, linked },
   };
 }
 
@@ -104,8 +119,9 @@ export async function POST(req) {
         return NextResponse.json(await load(req), { headers: { "Cache-Control": "no-store" } });
 
       case "save-settings": {
-        if (!["event", "mode", "schedule", "link_text"].includes(body.key)) return fail("Unknown setting");
+        if (!["event", "mode", "schedule", "link_text", "welcome_text"].includes(body.key)) return fail("Unknown setting");
         if (body.key === "link_text") body.value = cleanTemplate(body.value);
+        if (body.key === "welcome_text") body.value = cleanTemplate(body.value, { requireLink: false });
         const value = body.value ?? {};
         if (JSON.stringify(value).length > 20000) return fail("Too long");
         const { error } = await database.from("portal_settings").upsert({ key: body.key, value, updated_at: new Date().toISOString() });
@@ -155,6 +171,39 @@ export async function POST(req) {
         const result = await sendBatch(items, 25);
         const waiting = items.filter((i) => !smsReason(i.rsvp)).length - result.submitted - result.failed;
         return ok({ ...result, note: `Texted ${result.submitted}. ${result.failed ? result.failed + " need review in SMS history. " : ""}${result.skipped ? result.skipped + " skipped (already texted, not opted in, or no valid phone)." : ""}${waiting > 25 ? " Click again for the next 25." : ""}` });
+      }
+
+      case "text-welcome": {
+        // Welcome text + contact card. Goes to guests who opted in to texts and haven't said No.
+        const ids = Array.isArray(body.ids) ? body.ids.slice(0, 500) : [];
+        let template;
+        if (body.template) {
+          template = cleanTemplate(body.template, { requireLink: false });
+          await database.from("portal_settings").upsert({ key: "welcome_text", value: template, updated_at: new Date().toISOString() });
+        } else {
+          template = (await getSettings()).welcomeText || DEFAULT_WELCOME_TEXT;
+        }
+        const attachCard = body.attachCard !== false;
+        if (attachCard && !contactPhone()) return fail("Add SMS_CONTACT_PHONE in Vercel (the number guests should save, e.g. +13105551234) to send the contact card.");
+        const round = body.test ? `test-${Date.now()}` : String(body.round || "welcome-1").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30) || "welcome-1";
+        const confirmedOnly = body.audience === "confirmed";
+        let query = database.from("rsvps").select("*");
+        if (ids.length) query = query.in("id", ids);
+        const { data, error } = await query.limit(2000);
+        if (error) throw error;
+        const base = siteUrl(req);
+        const contactUrl = `${base}/contact.vcf`;
+        const items = (data || []).map((r) => ({
+          rsvp: r,
+          campaignKey: `welcome-${round}-${r.id}`,
+          message: renderMessage(template, r, r.access_token ? personalLink(req, r) : base, { fallback: DEFAULT_WELCOME_TEXT }),
+          ...(attachCard ? { mediaUrl: contactUrl, contactUrl } : {}),
+        }));
+        const result = await sendBatch(items, 25, { allowPending: !confirmedOnly || Boolean(body.test) });
+        return ok({
+          ...result,
+          note: `Sent ${result.submitted}${result.mms ? ` (${result.mms} with the contact card attached)` : ""}. ${result.failed ? result.failed + " need review in SMS history. " : ""}${result.skipped ? result.skipped + " skipped (already welcomed, not opted in, said No, or no valid phone)." : ""}${result.submitted === 25 ? " Click again for the next 25." : ""}`,
+        });
       }
 
       case "save-event": {
