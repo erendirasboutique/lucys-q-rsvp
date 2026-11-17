@@ -10,7 +10,10 @@ import {
 
 /* ---------- small helpers ---------- */
 const digits = (r) => String(r.phone || "").replace(/\D/g, "");
-const isMexico = (r) => digits(r).startsWith("52") && digits(r).length >= 12;
+// Same rule the server uses to decide where a number can be texted.
+const phoneDigits = (r) => String(r.phone_normalized || r.phone || "").replace(/\D/g, "");
+const isMexico = (r) => /^52\d{10}$/.test(phoneDigits(r));
+const isUS = (r) => /^1\d{10}$/.test(phoneDigits(r));
 const saidNo = (r) => !isYes(r.attending) && /^no\b/i.test(String(r.attending || "").trim());
 const optedIn = (r) => Boolean(r.sms_opt_in && r.sms_opt_in_at && digits(r).length >= 10);
 const initials = (n) => String(n || "").trim().split(/\s+/).slice(0, 2).map((p) => p[0] || "").join("").toUpperCase();
@@ -308,19 +311,24 @@ function SendModal({ kind, startWithTest, onClose, rsvps, portal, password, relo
   const [attachCard, setAttachCard] = useState(Boolean(portal?.contactCard?.ready));
   const [testId, setTestId] = useState("");
   const [tested, setTested] = useState(false);
+  const [country, setCountry] = useState("all");
+  const [retryFailed, setRetryFailed] = useState(true);
   const [result, setResult] = useState("");
   const [busy, run] = useRunner((m) => setResult(m));
   const stats = portal?.textStats || { welcomed: [], linked: [] };
-  const list = welcome
+  const inCountry = (r) => (country === "mx" ? isMexico(r) : country === "us" ? isUS(r) : true);
+  const everyone = welcome
     ? rsvps.filter((r) => optedIn(r) && (audience === "confirmed" ? isYes(r.attending) : !saidNo(r)))
     : rsvps.filter((r) => optedIn(r) && isYes(r.attending) && r.access_token);
+  const list = everyone.filter(inCountry);
   const sentIds = welcome ? stats.welcomed : stats.linked;
   const sent = list.filter((r) => sentIds.includes(r.id)).length;
   const mexico = list.filter(isMexico).length;
+  const mxLeft = everyone.filter((r) => isMexico(r) && !sentIds.includes(r.id)).length;
   const step = !tested && startWithTest ? 2 : sent >= list.length && list.length ? 4 : tested || sent ? 3 : 1;
   const action = welcome ? "text-welcome" : "text-links";
   const template = welcome ? portal?.settings?.welcomeText || DEFAULT_WELCOME_TEXT : portal?.settings?.linkText || DEFAULT_LINK_TEXT;
-  const extra = welcome ? { audience, attachCard, round: "welcome-1" } : { round: "invite-1" };
+  const extra = { country: country === "all" ? undefined : country, retryFailed, ...(welcome ? { audience, attachCard, round: "welcome-1" } : { round: "invite-1" }) };
 
   async function sendTest() {
     await run(async () => {
@@ -372,6 +380,24 @@ function SendModal({ kind, startWithTest, onClose, rsvps, portal, password, relo
               Attach the contact card{!portal?.contactCard?.ready && " (set SMS_CONTACT_PHONE first)"}
             </label>
           </div>
+        )}
+
+        <div className="ad-form2">
+          <div className="ad-field">
+            <label htmlFor="sm-country">Which numbers</label>
+            <select id="sm-country" value={country} onChange={(e) => setCountry(e.target.value)}>
+              <option value="all">Everyone ({everyone.length})</option>
+              <option value="us">US &amp; Canada (+1) only ({everyone.filter(isUS).length})</option>
+              <option value="mx">Mexico (+52) only ({everyone.filter(isMexico).length})</option>
+            </select>
+          </div>
+          <label className="ad-check" style={{ alignSelf: "end" }}>
+            <input type="checkbox" checked={retryFailed} onChange={(e) => setRetryFailed(e.target.checked)} />
+            Try again for texts that failed before
+          </label>
+        </div>
+        {country !== "mx" && mxLeft > 0 && sent > 0 && (
+          <div className="ad-notice">{mxLeft} Mexico {mxLeft === 1 ? "number hasn't" : "numbers haven't"} gotten this yet. Choose <b>Mexico (+52) only</b> above to send just to them.</div>
         )}
 
         <div className="ad-field">
