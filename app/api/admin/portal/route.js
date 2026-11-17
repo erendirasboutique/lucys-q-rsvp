@@ -5,7 +5,7 @@ import {
   db, fail, serverError, clip, isDate, isTime, BUCKET, getSettings, currentMode, audienceMatch,
   newAccessToken, fingerprint, tableCode, djCode, personalLink, siteUrl, isConfirmed, firstName,
 } from "../../../../lib/portal-server";
-import { sendBatch, linkMessage, smsConfigured, smsReason, countryOf, reopenFailed } from "../../../../lib/portal-sms";
+import { sendBatch, linkMessage, smsConfigured, smsReason, countryOf, reopenFailed, syncStatuses } from "../../../../lib/portal-sms";
 import { DEFAULT_LINK_TEXT, DEFAULT_WELCOME_TEXT, renderMessage } from "../../../../lib/link-text";
 
 function contactPhone() {
@@ -210,6 +210,11 @@ export async function POST(req) {
           reopened,
           note: `${reopened ? `Retried ${reopened} that failed before. ` : ""}Sent ${result.submitted}${result.mms ? ` (${result.mms} with the contact card attached)` : ""}. ${result.failed ? result.failed + " need review in SMS history. " : ""}${result.skipped ? result.skipped + " skipped (already welcomed, not opted in, said No, or no valid phone)." : ""}${result.submitted === 25 ? " Click again for the next 25." : ""}`,
         });
+      }
+
+      case "sync-status": {
+        const prefixes = (Array.isArray(body.prefixes) ? body.prefixes : ["welcome", "link"]).filter((p) => ["welcome", "link"].includes(p));
+        return ok(await syncStatuses(prefixes));
       }
 
       case "save-event": {
