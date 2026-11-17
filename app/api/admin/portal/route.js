@@ -6,6 +6,15 @@ import {
   newAccessToken, fingerprint, tableCode, djCode, personalLink, siteUrl, isConfirmed, firstName,
 } from "../../../../lib/portal-server";
 import { sendBatch, linkMessage, smsConfigured, smsReason } from "../../../../lib/portal-sms";
+import { DEFAULT_LINK_TEXT } from "../../../../lib/link-text";
+
+function cleanTemplate(t) {
+  const es = String(t?.es || "").replace(/\r/g, "").trim().slice(0, 1200);
+  const en = String(t?.en || "").replace(/\r/g, "").trim().slice(0, 1200);
+  if (!es) throw Object.assign(new Error("Write the Spanish message"), { status: 400 });
+  if (!/\{\s*link\s*\}/i.test(es) || (en && !/\{\s*link\s*\}/i.test(en))) throw Object.assign(new Error("Put {link} in the message where their personal link should go"), { status: 400 });
+  return { es, en };
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,7 +104,8 @@ export async function POST(req) {
         return NextResponse.json(await load(req), { headers: { "Cache-Control": "no-store" } });
 
       case "save-settings": {
-        if (!["event", "mode", "schedule"].includes(body.key)) return fail("Unknown setting");
+        if (!["event", "mode", "schedule", "link_text"].includes(body.key)) return fail("Unknown setting");
+        if (body.key === "link_text") body.value = cleanTemplate(body.value);
         const value = body.value ?? {};
         if (JSON.stringify(value).length > 20000) return fail("Too long");
         const { error } = await database.from("portal_settings").upsert({ key: body.key, value, updated_at: new Date().toISOString() });
@@ -126,12 +136,22 @@ export async function POST(req) {
 
       case "text-links": {
         const ids = Array.isArray(body.ids) ? body.ids.slice(0, 500) : [];
+        // Message: the one sent with this click (saved for next time), else the saved one, else the default.
+        let template;
+        if (body.template) {
+          template = cleanTemplate(body.template);
+          await database.from("portal_settings").upsert({ key: "link_text", value: template, updated_at: new Date().toISOString() });
+        } else {
+          template = (await getSettings()).linkText || DEFAULT_LINK_TEXT;
+        }
+        // Each guest gets each "round" once. A test always sends.
+        const round = body.test ? `test-${Date.now()}` : String(body.round || "invite-1").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30) || "invite-1";
         let query = database.from("rsvps").select("*");
         if (ids.length) query = query.in("id", ids);
         const { data, error } = await query.limit(2000);
         if (error) throw error;
         const rows = (data || []).filter((r) => r.access_token && (ids.length || isConfirmed(r)));
-        const items = rows.map((r) => ({ rsvp: r, campaignKey: `link-${r.id}-${fingerprint(r.access_token).slice(0, 8)}`, message: linkMessage(r, personalLink(req, r)) }));
+        const items = rows.map((r) => ({ rsvp: r, campaignKey: `link-${round}-${r.id}-${fingerprint(r.access_token).slice(0, 8)}`, message: linkMessage(r, personalLink(req, r), template) }));
         const result = await sendBatch(items, 25);
         const waiting = items.filter((i) => !smsReason(i.rsvp)).length - result.submitted - result.failed;
         return ok({ ...result, note: `Texted ${result.submitted}. ${result.failed ? result.failed + " need review in SMS history. " : ""}${result.skipped ? result.skipped + " skipped (already texted, not opted in, or no valid phone)." : ""}${waiting > 25 ? " Click again for the next 25." : ""}` });
@@ -256,6 +276,6 @@ export async function POST(req) {
     }
   } catch (e) {
     console.error("Admin portal failed", e);
-    return NextResponse.json({ ok: false, error: e?.message || "Something went wrong" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e?.message || "Something went wrong" }, { status: e?.status || 500 });
   }
 }

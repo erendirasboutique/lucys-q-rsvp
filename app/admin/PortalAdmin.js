@@ -2,6 +2,7 @@
 // Admin pieces for the personal guest pages: links, per-guest page fields, Arrivals, Program and Inbox tabs.
 import { useMemo, useState } from "react";
 import { QR } from "../guest/ui";
+import { LINK_TEXT_PRESETS, DEFAULT_LINK_TEXT, renderLinkText, smsSegments, daysUntil } from "../../lib/link-text";
 
 export function isYes(v) {
   const s = String(v || "").toLowerCase();
@@ -434,6 +435,7 @@ export function ProgramPanel({ rsvps, portal, password, reloadPortal, updateRsvp
         </div>
       )}
 
+      <LinkTextCard rsvps={rsvps} portal={portal} password={password} reloadPortal={reloadPortal} onNotice={onNotice} />
       <div className="pa-grid">
         <section className="pa-card">
           <h3>Event details</h3>
@@ -640,13 +642,124 @@ export function ProgramPanel({ rsvps, portal, password, reloadPortal, updateRsvp
         </section>
       </div>
 
-      <section className="pa-card">
-        <h3>Send everyone their personal link</h3>
-        <p className="pa-muted">Texts each confirmed guest who opted in to SMS their private link. 25 per click, never twice for the same link. {portal?.smsReady ? "" : "Texting isn't set up yet (Twilio environment variables are missing) — use Copy link in the guest list instead."}</p>
-        <div className="pa-row">
-          <button type="button" className="pa-btn" disabled={busy || !portal?.smsReady} onClick={() => confirm("Text the next 25 confirmed, opted-in guests their personal link?") && run(async () => { const d = await portalCall(password, "text-links", {}); onNotice(d.note); })}>Text links to confirmed guests</button>
-        </div>
-      </section>
     </div>
+  );
+}
+
+/* ---------- Text guests their personal link ---------- */
+function canText(r) {
+  return isYes(r.attending) && r.sms_opt_in && r.sms_opt_in_at && r.access_token && String(r.phone || "").replace(/\D/g, "").length >= 10;
+}
+
+export function LinkTextCard({ rsvps, portal, password, reloadPortal, onNotice }) {
+  const saved = portal?.settings?.linkText || DEFAULT_LINK_TEXT;
+  const [text, setText] = useState({ es: saved.es, en: saved.en || "" });
+  const [round, setRound] = useState("invite-1");
+  const [testId, setTestId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState("");
+  const eligible = rsvps.filter(canText);
+  const sample = rsvps.find((r) => r.id === testId) || eligible[0] || rsvps[0];
+  const sampleLink = linkFor(portal?.siteUrl, sample) || `${portal?.siteUrl || ""}/g/${"x".repeat(64)}`;
+  const previewEs = renderLinkText(text, { ...sample, preferred_language: "es" }, sampleLink);
+  const previewEn = text.en.trim() ? renderLinkText(text, { ...sample, preferred_language: "en" }, sampleLink) : "";
+  const segEs = smsSegments(previewEs);
+  const segEn = previewEn ? smsSegments(previewEn) : null;
+  const missingLink = !/\{\s*link\s*\}/i.test(text.es) || (text.en.trim() && !/\{\s*link\s*\}/i.test(text.en));
+  const changed = text.es !== saved.es || text.en !== (saved.en || "");
+
+  const run = async (fn) => {
+    setBusy(true);
+    setResult("");
+    try {
+      await fn();
+    } catch (e) {
+      setResult(e.message);
+      onNotice(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const send = (extra) => run(async () => {
+    const d = await portalCall(password, "text-links", { template: text, round, ...extra });
+    setResult(d.note || `Texted ${d.submitted}.`);
+    onNotice(d.note || `Texted ${d.submitted}.`);
+    reloadPortal();
+  });
+
+  return (
+    <section className="pa-card">
+      <h3>Text guests their personal link</h3>
+      <p className="pa-muted">
+        Goes to confirmed guests who opted in to texts ({eligible.length} right now), 25 per click. Guests who picked English on their page get the English version; everyone else gets Spanish.
+        {portal?.smsReady ? "" : " Texting isn't set up yet (Twilio environment variables are missing)."}
+      </p>
+      <div className="pa-row">
+        <span className="pa-muted">Start from:</span>
+        {Object.entries(LINK_TEXT_PRESETS).map(([key, p]) => (
+          <button key={key} type="button" className="mini-btn" onClick={() => setText({ es: p.es, en: p.en })}>{p.label}</button>
+        ))}
+      </div>
+      <div className="pa-grid2">
+        <div className="pa-field">
+          <label htmlFor="lt-es">Message in Spanish</label>
+          <textarea id="lt-es" rows={10} value={text.es} onChange={(e) => setText({ ...text, es: e.target.value })} />
+        </div>
+        <div className="pa-field">
+          <label htmlFor="lt-en">Message in English (for guests who chose English)</label>
+          <textarea id="lt-en" rows={10} value={text.en} onChange={(e) => setText({ ...text, en: e.target.value })} />
+        </div>
+      </div>
+      <p className="pa-muted" style={{ fontSize: 13 }}>
+        Fill-ins: <code>{"{nombre}"}</code> first name · <code>{"{dias}"}</code> days until the quince (today: {daysUntil()}) · <code>{"{link}"}</code> their personal link. English can use <code>{"{name}"}</code> and <code>{"{days}"}</code>.
+      </p>
+      {missingLink && <div className="message" style={{ margin: 0 }}>Add {"{link}"} where their personal link should go.</div>}
+
+      <div className="pa-grid2">
+        <div className="pa-field">
+          <label>Preview — {sample?.full_name || "guest"}</label>
+          <div className="pa-msg" style={{ maxWidth: "100%", background: "#f8f1f4" }}>{previewEs}</div>
+          <small className="pa-muted">{segEs.segments} text segments per guest ({segEs.encoding}, {segEs.length} characters)</small>
+        </div>
+        {previewEn && (
+          <div className="pa-field">
+            <label>English preview</label>
+            <div className="pa-msg" style={{ maxWidth: "100%", background: "#f8f1f4" }}>{previewEn}</div>
+            <small className="pa-muted">{segEn.segments} text segments per guest</small>
+          </div>
+        )}
+      </div>
+      <p className="pa-muted" style={{ fontSize: 13 }}>
+        Twilio bills per segment. Sending the Spanish version to all {eligible.length} eligible guests is about {eligible.length * segEs.segments} segments.
+      </p>
+
+      <div className="pa-grid2">
+        <div className="pa-field">
+          <label htmlFor="lt-test">1. Send a test to one guest (yourself)</label>
+          <div className="pa-row">
+            <select id="lt-test" value={testId} onChange={(e) => setTestId(e.target.value)} style={{ flex: 1, minWidth: 180 }}>
+              <option value="">Choose a guest…</option>
+              {rsvps.slice().sort((a, b) => a.full_name.localeCompare(b.full_name)).map((r) => (
+                <option key={r.id} value={r.id}>{r.full_name}{canText(r) ? "" : " (can't text: not confirmed or no opt-in)"}</option>
+              ))}
+            </select>
+            <button type="button" className="pa-btn ghost" disabled={busy || !testId || missingLink || !portal?.smsReady} onClick={() => send({ ids: [testId], test: true })}>Send test</button>
+          </div>
+        </div>
+        <div className="pa-field">
+          <label htmlFor="lt-round">2. Send to everyone — round name</label>
+          <div className="pa-row">
+            <input id="lt-round" value={round} onChange={(e) => setRound(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
+            <button type="button" className="pa-btn" disabled={busy || missingLink || !portal?.smsReady || !eligible.length} onClick={() => confirm(`Text the next 25 confirmed, opted-in guests (round "${round}")?`) && send({})}>Send next 25</button>
+          </div>
+          <small className="pa-muted">Each guest gets a round only once, so clicking again moves on to the next 25. To send a new message later (like an update), use a new round name such as “update-1”.</small>
+        </div>
+      </div>
+      <div className="pa-row">
+        <button type="button" className="mini-btn" disabled={busy || !changed || missingLink} onClick={() => run(async () => { await portalCall(password, "save-settings", { key: "link_text", value: text }); setResult("Message saved. “Text it” in the guest list uses it too."); reloadPortal(); })}>Save message without sending</button>
+        {changed && <span className="pa-muted" style={{ fontSize: 13 }}>Unsaved changes — sending also saves them.</span>}
+      </div>
+      {result && <div className="message" role="status" style={{ margin: 0 }}>{result}</div>}
+    </section>
   );
 }
