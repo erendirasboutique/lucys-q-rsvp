@@ -312,6 +312,28 @@ function SendModal({ kind, startWithTest, onClose, rsvps, portal, password, relo
   const [testId, setTestId] = useState("");
   const [tested, setTested] = useState(false);
   const [country, setCountry] = useState("all");
+  const [checking, setChecking] = useState(true);
+  const [checkNote, setCheckNote] = useState("");
+
+  // When the window opens, ask Twilio what really happened to earlier texts, so ones that
+  // didn't go through (like Mexico numbers before they were turned on) can be sent again.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const d = await portalCall(password, "sync-status", { prefixes: [welcome ? "welcome" : "link"] });
+        if (!alive) return;
+        if (d.failed) setCheckNote(`Checked with Twilio: ${d.failed} earlier ${d.failed === 1 ? "text didn't" : "texts didn't"} go through. They're counted as not sent now — leave “Try again” checked to resend them.`);
+        await reloadPortal();
+      } catch (e) {
+        if (alive) setCheckNote(`Couldn't check delivery with Twilio (${e.message}). Counts may include texts that didn't go through.`);
+      } finally {
+        if (alive) setChecking(false);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [retryFailed, setRetryFailed] = useState(true);
   const [result, setResult] = useState("");
   const [busy, run] = useRunner((m) => setResult(m));
@@ -396,6 +418,8 @@ function SendModal({ kind, startWithTest, onClose, rsvps, portal, password, relo
             Try again for texts that failed before
           </label>
         </div>
+        {checking && <div className="ad-notice" role="status">Checking with Twilio which earlier texts actually went through…</div>}
+        {!checking && checkNote && <div className="ad-notice" role="status">{checkNote}</div>}
         {country !== "mx" && mxLeft > 0 && sent > 0 && (
           <div className="ad-notice">{mxLeft} Mexico {mxLeft === 1 ? "number hasn't" : "numbers haven't"} gotten this yet. Choose <b>Mexico (+52) only</b> above to send just to them.</div>
         )}
@@ -418,7 +442,7 @@ function SendModal({ kind, startWithTest, onClose, rsvps, portal, password, relo
         {result && <div className={/^(Sent|Texted|Test sent)/.test(result) ? "ad-ok" : "ad-notice"} role="status">{result}</div>}
         <div className="ad-row" style={{ justifyContent: "flex-end" }}>
           <button type="button" className="ad-btn ghost" onClick={onClose}>{sent ? "Done for now" : "Cancel"}</button>
-          <button type="button" className="ad-btn" disabled={busy || !list.length || sent >= list.length} onClick={sendNext}><Icon name="send" size={16} />{busy ? "Sending…" : sent ? "Send the next 25" : `Send to the first ${Math.min(25, list.length)}`}</button>
+          <button type="button" className="ad-btn" disabled={busy || checking || !list.length || sent >= list.length} onClick={sendNext}><Icon name="send" size={16} />{busy ? "Sending…" : sent ? "Send the next 25" : `Send to the first ${Math.min(25, list.length)}`}</button>
         </div>
         <p className="ad-muted ad-small">You can close this and come back. Guests who already got it are always skipped.</p>
       </section>
