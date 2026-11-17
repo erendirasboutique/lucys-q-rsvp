@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import {db,adminOK,candidates,eligibleRows,client,segments,apiError,safeError} from '../../../../lib/lucy-sms';
+import {withPrefix} from '../../../../lib/link-text';
 export const runtime='nodejs';
 const validId=(v)=>typeof v==='string' && /^[0-9a-f]{8}-[0-9a-f-]{27,40}$/i.test(v);
 export async function POST(req){
@@ -17,7 +18,7 @@ export async function POST(req){
   const chosen=eligible.filter(r=>ids.has(String(r.id)));
   if(chosen.length!==recipientIds.length)return Response.json({ok:false,error:'Some selected guests are not confirmed, opted in, or have invalid numbers'},{status:400});
   const phones=new Set();
-  const rows=chosen.map(r=>({id:r.id,name:r.name,phone:r.phone,message:message.replaceAll('{nombre}',String(r.name||'Invitado').trim().split(/\s+/)[0])}));
+  const rows=chosen.map(r=>({id:r.id,name:r.name,phone:r.phone,message:withPrefix(message.replaceAll('{nombre}',String(r.name||'Invitado').trim().split(/\s+/)[0]))}));
   if(rows.some(r=>{if(phones.has(r.phone))return true;phones.add(r.phone);return false;}))return Response.json({ok:false,error:'Multiple guests share a phone. Select one per phone.'},{status:400});
   const segmentCount=rows.reduce((sum,r)=>sum+segments(r.message).segments,0);
   const rate=Number(process.env.SMS_ESTIMATED_USD_PER_SEGMENT);

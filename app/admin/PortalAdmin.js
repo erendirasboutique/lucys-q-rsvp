@@ -711,7 +711,7 @@ export function LinkTextCard({ rsvps, portal, password, reloadPortal, onNotice }
         </div>
       </div>
       <p className="pa-muted" style={{ fontSize: 13 }}>
-        Fill-ins: <code>{"{nombre}"}</code> first name · <code>{"{dias}"}</code> days until the quince (today: {daysUntil()}) · <code>{"{link}"}</code> their personal link. English can use <code>{"{name}"}</code> and <code>{"{days}"}</code>.
+        Every text automatically starts with <strong>Lucy's Quinceañera:</strong> (it shows in the preview). Fill-ins: <code>{"{nombre}"}</code> first name · <code>{"{dias}"}</code> days until the quince (today: {daysUntil()}) · <code>{"{link}"}</code> their personal link. English can use <code>{"{name}"}</code> and <code>{"{days}"}</code>.
       </p>
       {missingLink && <div className="message" style={{ margin: 0 }}>Add {"{link}"} where their personal link should go.</div>}
 

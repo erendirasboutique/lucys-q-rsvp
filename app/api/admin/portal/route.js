@@ -228,7 +228,7 @@ export async function POST(req) {
         const items = targets.map((r) => ({
           rsvp: r,
           campaignKey: `ann-${a.id}`,
-          message: `Lucy's Quinceañera: ${a.body}${r.access_token ? ` Más info: ${personalLink(req, r)}` : ""}`,
+          message: `${a.body}${r.access_token ? ` Más info: ${personalLink(req, r)}` : ""}`,
         }));
         const result = await sendBatch(items, 25);
         return ok({ ...result, note: `Texted ${result.submitted}. ${result.skipped} skipped (already texted, not opted in, or no valid phone).${result.submitted === 25 ? " Click again for the next 25." : ""}` });
