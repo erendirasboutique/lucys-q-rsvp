@@ -1,6 +1,6 @@
 // rsvp.lucysquinceanera.com/contact.vcf — the contact card guests save to their phone.
 // Sent as an attachment with the welcome text (US/Canada) or opened from a link (Mexico).
-// Phone number comes from SMS_CONTACT_PHONE; the photo is public/contact-photo.jpg.
+// Phone number comes from SMS_CONTACT_PHONE; the photo is public/contact-photo.jpg (replace that file to change it).
 export const runtime = "nodejs";
 export const revalidate = 3600;
 
@@ -20,7 +20,8 @@ export async function GET(req) {
   if (!/^\+\d{10,15}$/.test(phone)) {
     return new Response("Contact card not set up yet: add SMS_CONTACT_PHONE (e.g. +13105551234) in Vercel.", { status: 503 });
   }
-  const site = (process.env.PUBLIC_SITE_URL || new URL(req.url).origin).replace(/\/+$/, "");
+  // Website shown on the card. Change it here (or set CONTACT_CARD_URL in Vercel).
+  const site = (process.env.CONTACT_CARD_URL || "https://www.lucysquinceanera.com").replace(/\/+$/, "");
 
   let photo = "";
   try {
