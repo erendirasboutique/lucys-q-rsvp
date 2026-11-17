@@ -5,7 +5,7 @@ import {
   db, fail, serverError, clip, isDate, isTime, BUCKET, getSettings, currentMode, audienceMatch,
   newAccessToken, fingerprint, tableCode, djCode, personalLink, siteUrl, isConfirmed, firstName,
 } from "../../../../lib/portal-server";
-import { sendBatch, linkMessage, smsConfigured, smsReason } from "../../../../lib/portal-sms";
+import { sendBatch, linkMessage, smsConfigured, smsReason, countryOf, reopenFailed } from "../../../../lib/portal-sms";
 import { DEFAULT_LINK_TEXT, DEFAULT_WELCOME_TEXT, renderMessage } from "../../../../lib/link-text";
 
 function contactPhone() {
@@ -64,7 +64,7 @@ async function load(req) {
   const sentTo = async (prefix) => {
     const { data, error } = await database.from("sms_outbox").select("campaign_key,rsvp_id,status").like("campaign_key", `${prefix}-%`).limit(10000);
     if (error) return [];
-    return [...new Set((data || []).filter((r) => !r.campaign_key.startsWith(`${prefix}-test-`) && r.status !== "needs_review").map((r) => r.rsvp_id))];
+    return [...new Set((data || []).filter((r) => !r.campaign_key.startsWith(`${prefix}-test-`) && !/-failed-\d+$/.test(r.campaign_key) && !["needs_review", "failed", "undelivered"].includes(r.status)).map((r) => r.rsvp_id))];
   };
   const [welcomed, linked] = await Promise.all([sentTo("welcome"), sentTo("link")]);
 
@@ -166,11 +166,14 @@ export async function POST(req) {
         if (ids.length) query = query.in("id", ids);
         const { data, error } = await query.limit(2000);
         if (error) throw error;
-        const rows = (data || []).filter((r) => r.access_token && (ids.length || isConfirmed(r)));
+        const country = ["us", "mx"].includes(body.country) ? body.country : null;
+        const rows = (data || []).filter((r) => r.access_token && (ids.length || isConfirmed(r)) && (!country || countryOf(r) === country));
         const items = rows.map((r) => ({ rsvp: r, campaignKey: `link-${round}-${r.id}-${fingerprint(r.access_token).slice(0, 8)}`, message: linkMessage(r, personalLink(req, r), template) }));
+        const reopened = body.retryFailed && !body.test ? await reopenFailed(items.map((i) => i.campaignKey)) : 0;
         const result = await sendBatch(items, 25);
+        result.reopened = reopened;
         const waiting = items.filter((i) => !smsReason(i.rsvp)).length - result.submitted - result.failed;
-        return ok({ ...result, note: `Texted ${result.submitted}. ${result.failed ? result.failed + " need review in SMS history. " : ""}${result.skipped ? result.skipped + " skipped (already texted, not opted in, or no valid phone)." : ""}${waiting > 25 ? " Click again for the next 25." : ""}` });
+        return ok({ ...result, note: `${result.reopened ? `Retried ${result.reopened} that failed before. ` : ""}Texted ${result.submitted}. ${result.failed ? result.failed + " need review in SMS history. " : ""}${result.skipped ? result.skipped + " skipped (already texted, not opted in, or no valid phone)." : ""}${waiting > 25 ? " Click again for the next 25." : ""}` });
       }
 
       case "text-welcome": {
@@ -193,16 +196,19 @@ export async function POST(req) {
         if (error) throw error;
         const base = siteUrl(req);
         const contactUrl = `${base}/contact.vcf`;
-        const items = (data || []).map((r) => ({
+        const country = ["us", "mx"].includes(body.country) ? body.country : null;
+        const items = (data || []).filter((r) => !country || countryOf(r) === country).map((r) => ({
           rsvp: r,
           campaignKey: `welcome-${round}-${r.id}`,
           message: renderMessage(template, r, r.access_token ? personalLink(req, r) : base, { fallback: DEFAULT_WELCOME_TEXT }),
           ...(attachCard ? { mediaUrl: contactUrl, contactUrl } : {}),
         }));
+        const reopened = body.retryFailed && !body.test ? await reopenFailed(items.map((i) => i.campaignKey)) : 0;
         const result = await sendBatch(items, 25, { allowPending: !confirmedOnly || Boolean(body.test) });
         return ok({
           ...result,
-          note: `Sent ${result.submitted}${result.mms ? ` (${result.mms} with the contact card attached)` : ""}. ${result.failed ? result.failed + " need review in SMS history. " : ""}${result.skipped ? result.skipped + " skipped (already welcomed, not opted in, said No, or no valid phone)." : ""}${result.submitted === 25 ? " Click again for the next 25." : ""}`,
+          reopened,
+          note: `${reopened ? `Retried ${reopened} that failed before. ` : ""}Sent ${result.submitted}${result.mms ? ` (${result.mms} with the contact card attached)` : ""}. ${result.failed ? result.failed + " need review in SMS history. " : ""}${result.skipped ? result.skipped + " skipped (already welcomed, not opted in, said No, or no valid phone)." : ""}${result.submitted === 25 ? " Click again for the next 25." : ""}`,
         });
       }
 
