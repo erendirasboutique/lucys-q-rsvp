@@ -1,24 +1,35 @@
 import crypto from 'node:crypto';
 import {db,adminOK,candidates,eligibleRows,client,segments,apiError,safeError} from '../../../../lib/lucy-sms';
 import {withPrefix} from '../../../../lib/link-text';
+import {siteUrl} from '../../../../lib/portal-server';
+const AUDIENCES=['confirmed','pending','open'];
 export const runtime='nodejs';
 const validId=(v)=>typeof v==='string' && /^[0-9a-f]{8}-[0-9a-f-]{27,40}$/i.test(v);
 export async function POST(req){
  try{
-  const {password,action,requestId,recipientIds,message,confirmation}=await req.json();
+  const {password,action,requestId,recipientIds,message,confirmation,audience:rawAudience}=await req.json();
   if(!adminOK(password))return Response.json({ok:false,error:'Unauthorized'},{status:401});
+  const audience=AUDIENCES.includes(rawAudience)?rawAudience:'confirmed';
+  if(action==='list'){
+   const rows=eligibleRows(await candidates(db(),audience)).filter(r=>!r.reason).map(r=>({id:r.id,name:r.name,phone:r.phone,status:r.status}));
+   return Response.json({ok:true,rows});
+  }
   if(!['preview','send'].includes(action))return Response.json({ok:false,error:'Invalid action'},{status:400});
   if(!Array.isArray(recipientIds)||recipientIds.length<1||recipientIds.length>25||recipientIds.some(id=>typeof id!=='string'))return Response.json({ok:false,error:'Select 1–25 recipients'},{status:400});
   if(new Set(recipientIds).size!==recipientIds.length)return Response.json({ok:false,error:'Duplicate guest selection'},{status:400});
   if(typeof message!=='string'||!message.trim()||message.length>1200||/\[[^\]]+\]/.test(message))return Response.json({ok:false,error:'Enter a message and replace all bracketed placeholders'},{status:400});
   if(!validId(requestId))return Response.json({ok:false,error:'Invalid send request ID'},{status:400});
   const database=db();
-  const eligible=eligibleRows(await candidates(database)).filter(r=>!r.reason);
+  const pool=await candidates(database,audience);
+  const tokenOf=new Map(pool.map(r=>[String(r.id),r.access_token]));
+  const eligible=eligibleRows(pool).filter(r=>!r.reason);
+  const site=siteUrl(req);
   const ids=new Set(recipientIds);
   const chosen=eligible.filter(r=>ids.has(String(r.id)));
-  if(chosen.length!==recipientIds.length)return Response.json({ok:false,error:'Some selected guests are not confirmed, opted in, or have invalid numbers'},{status:400});
+  if(chosen.length!==recipientIds.length)return Response.json({ok:false,error:'Some selected guests are no longer in this list (they may have answered, opted out, or have an invalid number). Refresh and try again.'},{status:400});
+  if(/\{\s*link\s*\}/i.test(message)&&chosen.some(r=>!tokenOf.get(String(r.id))))return Response.json({ok:false,error:'Some selected guests don’t have a personal link yet. Remove {link} or reset their link in Guests.'},{status:400});
   const phones=new Set();
-  const rows=chosen.map(r=>({id:r.id,name:r.name,phone:r.phone,message:withPrefix(message.replaceAll('{nombre}',String(r.name||'Invitado').trim().split(/\s+/)[0]))}));
+  const rows=chosen.map(r=>({id:r.id,name:r.name,phone:r.phone,message:withPrefix(message.replaceAll('{nombre}',String(r.name||'Invitado').trim().split(/\s+/)[0]).replace(/\{\s*link\s*\}/gi,`${site}/g/${tokenOf.get(String(r.id))||''}`))}));
   if(rows.some(r=>{if(phones.has(r.phone))return true;phones.add(r.phone);return false;}))return Response.json({ok:false,error:'Multiple guests share a phone. Select one per phone.'},{status:400});
   const segmentCount=rows.reduce((sum,r)=>sum+segments(r.message).segments,0);
   const rate=Number(process.env.SMS_ESTIMATED_USD_PER_SEGMENT);
